@@ -24,6 +24,7 @@ class EmploymentRelationModel extends Model
         'location',
         'location_id',
         'start_date',
+        'end_date',
         'previous_relation_id',
         'created_by_user_id',
     ];
@@ -38,6 +39,7 @@ class EmploymentRelationModel extends Model
         'status' => 'required|max_length[30]',
         'location' => 'permit_empty|max_length[190]',
         'start_date' => 'required|valid_date[Y-m-d]',
+        'end_date' => 'permit_empty|valid_date[Y-m-d]',
     ];
 
     protected $validationMessages = [
@@ -78,6 +80,14 @@ class EmploymentRelationModel extends Model
     {
         return $this->update($relationId, [
             'status' => $status,
+        ]);
+    }
+
+    public function close(int $relationId, string $endDate): bool
+    {
+        return $this->update($relationId, [
+            'status' => EmploymentRelation::STATUS_CLOSED,
+            'end_date' => $endDate,
         ]);
     }
 }

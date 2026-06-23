@@ -13,6 +13,7 @@ $routes->group('declarations', [
     $routes->match(['get', 'post'], 'persons/datatable', 'PersonsController::datatable');
     $routes->get('persons/(:num)', 'PersonsController::show/$1');
     $routes->post('persons/(:num)/relations/create', 'PersonsController::createRelation/$1');
+    $routes->post('persons/(:num)/relations/(:num)/close', 'PersonsController::closeRelation/$1/$2');
     $routes->post('persons/(:num)/relations/(:num)/packets/create', 'PersonsController::createPacket/$1/$2');
     $routes->get('packets/(:num)', 'PacketsController::show/$1');
     $routes->post('packets/(:num)/invitation/create', 'PacketsController::createInvitation/$1');
@@ -30,6 +31,7 @@ $routes->group('', [
 ], static function ($routes): void {
     $routes->get('/', 'InvitationController::landing');
     $routes->get('start/(:segment)', 'InvitationController::start/$1');
+    $routes->post('start/(:segment)/verify-antra', 'InvitationController::verifyAntra/$1');
     $routes->get('start/(:segment)/item/(:num)', 'InvitationController::item/$1/$2');
     $routes->post('start/(:segment)/tax-template/(:num)/select', 'InvitationController::selectTaxTemplate/$1/$2');
     $routes->post('start/(:segment)/item/(:num)', 'InvitationController::submitItem/$1/$2');

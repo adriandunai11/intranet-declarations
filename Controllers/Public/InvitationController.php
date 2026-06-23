@@ -45,9 +45,21 @@ class InvitationController extends BaseController
     {
         try {
             $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return $this->antraVerificationView($context);
+            }
+
             $this->contextService->markOpened($context);
 
             $items = $this->submissionService->getItemsForContext($context);
+            $openPersonalDataItem = $this->findOpenPersonalDataItem($items);
+
+            if ($openPersonalDataItem) {
+                return redirect()
+                    ->to($this->urlService->item($context->token, (int) $openPersonalDataItem->id));
+            }
+
             $itemUrls = [];
 
             foreach ($items as $item) {
@@ -77,10 +89,40 @@ class InvitationController extends BaseController
         }
     }
 
+    public function verifyAntra(string $token)
+    {
+        try {
+            $context = $this->contextService->resolveOrFail($token);
+            $submittedAntraId = trim((string) $this->request->getPost('antra_id'));
+            $expectedAntraId = trim((string) ($context->person->antra_id ?? ''));
+
+            if ($submittedAntraId === '' || $expectedAntraId === '' || !hash_equals($expectedAntraId, $submittedAntraId)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->withInput()
+                    ->with('sError', 'Az Antra azonosító nem egyezik a meghívóhoz rögzített azonosítóval.');
+            }
+
+            session()->set($this->antraSessionKey($context), true);
+
+            return redirect()
+                ->to($this->urlService->start($context->token));
+        } catch (Throwable $e) {
+            return $this->invalid($e->getMessage());
+        }
+    }
+
     public function selectTaxTemplate(string $token, int $templateId)
     {
         try {
             $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+            }
+
             $template = $this->templateModel->find($templateId);
 
             if (!$template || !$this->formRegistry->hasConcreteHandlerForCode((string) $template->code)) {
@@ -103,7 +145,24 @@ class InvitationController extends BaseController
     {
         try {
             $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+            }
+
             $item = $this->submissionService->getItemForContext($context, $itemId);
+            $openPersonalDataItem = $this->findOpenPersonalDataItem(
+                $this->submissionService->getItemsForContext($context)
+            );
+
+            if ($openPersonalDataItem && (int) $openPersonalDataItem->id !== (int) $item->id) {
+                return redirect()
+                    ->to($this->urlService->item($context->token, (int) $openPersonalDataItem->id))
+                    ->with('sError', 'Először az Antra azonosítót és a személyes adatokat kell megadni.');
+            }
+
             $submission = $this->submissionService->findSubmissionForItem($itemId);
             $handler = $this->formRegistry->forItem($item);
 
@@ -126,7 +185,24 @@ class InvitationController extends BaseController
     {
         try {
             $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+            }
+
             $item = $this->submissionService->getItemForContext($context, $itemId);
+            $openPersonalDataItem = $this->findOpenPersonalDataItem(
+                $this->submissionService->getItemsForContext($context)
+            );
+
+            if ($openPersonalDataItem && (int) $openPersonalDataItem->id !== (int) $item->id) {
+                return redirect()
+                    ->to($this->urlService->item($context->token, (int) $openPersonalDataItem->id))
+                    ->with('sError', 'Először az Antra azonosítót és a személyes adatokat kell megadni.');
+            }
+
             $handler = $this->formRegistry->forItem($item);
 
             $this->submissionService->submit($context, $item, $handler, $this->request);
@@ -167,6 +243,39 @@ class InvitationController extends BaseController
             'startUrl' => $this->urlService->start($context->token),
             'itemUrl' => $this->urlService->item($context->token, (int) $item->id),
         ];
+    }
+
+    protected function antraVerificationView(InvitationContext $context)
+    {
+        return view('App\Modules\Declarations\Views\public\invitation\verify_antra', [
+            'title' => 'Hozzáférés ellenőrzése',
+            'verifyUrl' => $this->urlService->verifyAntra($context->token),
+        ]);
+    }
+
+    protected function isAntraVerified(InvitationContext $context): bool
+    {
+        return session()->get($this->antraSessionKey($context)) === true;
+    }
+
+    protected function antraSessionKey(InvitationContext $context): string
+    {
+        return 'declaration_invitation_antra_verified_' . (int) $context->invitation->id;
+    }
+
+    protected function findOpenPersonalDataItem(array $items): ?object
+    {
+        foreach ($items as $item) {
+            if ((string) ($item->template_code ?? '') !== 'personal_data_statement') {
+                continue;
+            }
+
+            if (!$this->submissionService->isClosed($item)) {
+                return $item;
+            }
+        }
+
+        return null;
     }
 
     protected function invalid(string $message = 'A megnyitott meghívó link nem érvényes, lejárt vagy már nem használható.')

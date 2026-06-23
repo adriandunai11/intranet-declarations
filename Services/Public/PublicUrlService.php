@@ -18,6 +18,11 @@ class PublicUrlService
         return $this->baseUrl . '/start/' . rawurlencode($token);
     }
 
+    public function verifyAntra(string $token): string
+    {
+        return $this->start($token) . '/verify-antra';
+    }
+
     public function item(string $token, int $itemId): string
     {
         return $this->start($token) . '/item/' . $itemId;

@@ -130,6 +130,47 @@ class EmploymentRelationService
         return (int) $relationId;
     }
 
+    public function closeRelation(int $personId, int $relationId, string $endDate): void
+    {
+        $relation = $this->relationModel->find($relationId);
+
+        if (!$relation || (int) $relation->person_id !== $personId) {
+            throw new RuntimeException('A jogviszony nem található ennél a személynél.');
+        }
+
+        $endDate = trim($endDate);
+
+        if ($endDate === '' || strtotime($endDate) === false) {
+            throw new RuntimeException('A lezárás dátumának megadása kötelező.');
+        }
+
+        if (!empty($relation->start_date) && strtotime($endDate) < strtotime((string) $relation->start_date)) {
+            throw new RuntimeException('A lezárás dátuma nem lehet korábbi, mint a kezdés dátuma.');
+        }
+
+        if (!$relation->isOpen()) {
+            throw new RuntimeException('Csak nyitott jogviszony zárható le.');
+        }
+
+        $oldStatus = (string) $relation->status;
+
+        if (!$this->relationModel->close($relationId, $endDate)) {
+            $errors = $this->relationModel->errors();
+
+            throw new RuntimeException(!empty($errors) ? implode(' ', $errors) : 'A jogviszony lezárása sikertelen.');
+        }
+
+        $this->auditService->log('employment_relation_closed', 'employment_relation', $relationId, [
+            'person_id' => $personId,
+            'employment_relation_id' => $relationId,
+            'old_status' => $oldStatus,
+            'new_status' => EmploymentRelation::STATUS_CLOSED,
+            'payload' => [
+                'end_date' => $endDate,
+            ],
+        ]);
+    }
+
 
     public function getRecruiters(): array
     {

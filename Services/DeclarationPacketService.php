@@ -19,12 +19,15 @@ use App\Modules\Declarations\Models\DeclarationSubmissionModel;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Presenters\Submissions\SubmissionPresenterRegistry;
 use App\Modules\Declarations\Services\PacketReviewAuthorizationService;
+use App\Modules\Declarations\Services\DeclarationForms\DeclarationFormRegistry;
 
 use DateTime;
 use RuntimeException;
 
 class DeclarationPacketService
 {
+    private const PERSONAL_DATA_TEMPLATE_CODE = 'personal_data_statement';
+
     protected DeclarationPacketModel $packetModel;
     protected DeclarationPacketItemModel $itemModel;
     protected DeclarationTemplateModel $templateModel;
@@ -38,6 +41,7 @@ class DeclarationPacketService
     protected SubmissionPresenterRegistry $submissionPresenterRegistry;
     protected PacketReviewAuthorizationService $reviewAuthorizationService;
     protected DeclarationAuditLogModel $auditLogModel;
+    protected DeclarationFormRegistry $formRegistry;
 
     public function __construct()
     {
@@ -54,6 +58,7 @@ class DeclarationPacketService
         $this->submissionPresenterRegistry = new SubmissionPresenterRegistry();
         $this->reviewAuthorizationService = new PacketReviewAuthorizationService();
         $this->auditLogModel = new DeclarationAuditLogModel();
+        $this->formRegistry = new DeclarationFormRegistry();
     }
 
     public function getAvailableTemplates(?int $taxYear = null): array
@@ -69,9 +74,12 @@ class DeclarationPacketService
     public function createDefaultOnboardingForRelation(int $relationId, ?int $taxYear = null): int
     {
         $templates = $this->templateModel->findDefaultOnboardingTemplates($taxYear);
+        $templates = array_values(array_filter($templates, function ($template): bool {
+            return $this->formRegistry->hasConcreteHandlerForCode((string) ($template->code ?? ''));
+        }));
 
         if (empty($templates)) {
-            throw new RuntimeException('Nincs aktív alap beléptetési nyilatkozat sablon.');
+            throw new RuntimeException('Nincs aktív online kitölthető alap beléptetési nyilatkozat sablon.');
         }
 
         $templateIds = array_map(static fn($template): int => (int) $template->id, $templates);
@@ -92,19 +100,20 @@ class DeclarationPacketService
             throw new RuntimeException('A jogviszony nem található.');
         }
 
-
-        $existingPacket = $this->packetModel->findActiveByRelationAndTaxYear($relationId, $taxYear);
-
-        if ($existingPacket) {
-            throw new RuntimeException(
-                'Ehhez a jogviszonyhoz erre az adóévre már létezik aktív nyilatkozatcsomag: #' . $existingPacket->id
-            );
+        if (!$relation->isOpen()) {
+            throw new RuntimeException('Lezárt vagy törölt jogviszonyhoz nem indítható nyilatkozatcsomag.');
         }
+
+        $taxYear = $this->normalizeTaxYear($taxYear);
+        $this->assertNoBlockingPacketForRelation($relation, $taxYear);
+
         $templateIds = array_values(array_unique(array_filter(array_map('intval', $templateIds))));
 
         if (empty($templateIds)) {
             throw new RuntimeException('Legalább egy nyilatkozatot ki kell választani.');
         }
+
+        $templateIds = $this->withPersonalDataTemplate($templateIds);
 
         $templates = [];
         foreach ($templateIds as $templateId) {
@@ -112,6 +121,10 @@ class DeclarationPacketService
 
             if (!$template || !$template->isActive()) {
                 throw new RuntimeException('A kiválasztott nyilatkozat nem található vagy nem aktív.');
+            }
+
+            if (!$this->formRegistry->hasConcreteHandlerForCode((string) $template->code)) {
+                throw new RuntimeException('A kiválasztott nyilatkozat még nem tölthető ki online: ' . ($template->name ?: $template->code));
             }
 
             $templates[] = $template;
@@ -272,6 +285,14 @@ class DeclarationPacketService
             throw new RuntimeException('A beléptetési folyamat nem található.');
         }
 
+        $this->assertNoBlockingPacketForRelation(
+            $relation,
+            $this->normalizeTaxYear(!empty($packet->tax_year) ? (int) $packet->tax_year : null),
+            (int) $packet->id
+        );
+
+        $this->assertPacketContainsPersonalDataItem((int) $packet->id);
+
         $candidateEmail = trim((string) ($person->email ?? ''));
 
         if ($candidateEmail === '') {
@@ -355,6 +376,14 @@ class DeclarationPacketService
         if (!$relation) {
             throw new RuntimeException('A beléptetési folyamat nem található.');
         }
+
+        $this->assertNoBlockingPacketForRelation(
+            $relation,
+            $this->normalizeTaxYear(!empty($packet->tax_year) ? (int) $packet->tax_year : null),
+            (int) $packet->id
+        );
+
+        $this->assertPacketContainsPersonalDataItem((int) $packet->id);
 
         $candidateEmail = trim((string) ($person->email ?? ''));
 
@@ -667,6 +696,54 @@ class DeclarationPacketService
         );
 
         return (int) $itemId;
+    }
+
+    private function normalizeTaxYear(?int $taxYear): int
+    {
+        return $taxYear ?: (int) date('Y');
+    }
+
+    private function withPersonalDataTemplate(array $templateIds): array
+    {
+        $template = $this->templateModel->findByCode(self::PERSONAL_DATA_TEMPLATE_CODE);
+
+        if (!$template || !$template->isActive()) {
+            throw new RuntimeException('A személyes adatok nyilatkozat sablon nem található vagy nem aktív.');
+        }
+
+        $templateIds[] = (int) $template->id;
+
+        return array_values(array_unique(array_map('intval', $templateIds)));
+    }
+
+    private function assertPacketContainsPersonalDataItem(int $packetId): void
+    {
+        foreach ($this->itemModel->findWithTemplatesByPacketId($packetId) as $item) {
+            if ((string) ($item->template_code ?? '') === self::PERSONAL_DATA_TEMPLATE_CODE) {
+                return;
+            }
+        }
+
+        throw new RuntimeException('A csomagból hiányzik a személyes adatok nyilatkozata, ezért nem küldhető ki.');
+    }
+
+    private function assertNoBlockingPacketForRelation(EmploymentRelation $relation, int $taxYear, ?int $excludePacketId = null): void
+    {
+        $existingPacket = $this->packetModel->findBlockingByPersonCompanyAndTaxYearForOpenRelations(
+            (int) $relation->person_id,
+            (int) $relation->company_id,
+            $taxYear,
+            $excludePacketId
+        );
+
+        if (!$existingPacket) {
+            return;
+        }
+
+        throw new RuntimeException(
+            'Ehhez a nyitott jogviszonyhoz ennél a cégnél erre az adóévre már létezik nyilatkozatcsomag: #'
+            . $existingPacket->id
+        );
     }
 
 }

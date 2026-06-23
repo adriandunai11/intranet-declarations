@@ -105,6 +105,7 @@
                                         <th>Telephely</th>
                                         <th>Elsődleges toborzó</th>
                                         <th>Kezdés</th>
+                                        <th>Lezárás</th>
                                         <th>Művelet</th>
                                     </tr>
                                 </thead>
@@ -144,11 +145,22 @@
                                                 <?= esc($recruiterDisplayNames[(int) $relation->primary_recruiter_user_id] ?? '-') ?>
                                             </td>
                                             <td><?= esc($relation->start_date ?: '-') ?></td>
+                                            <td><?= esc($relation->end_date ?: '-') ?></td>
                                             <td>
                                                 <?php if (hasPermissions('declarations_packets_create')): ?>
                                                     <button type="button" class="btn btn-sm btn-default" data-toggle="modal"
                                                         data-target="#createPacketModal<?= (int) $relation->id ?>">
                                                         <i class="fas fa-file-signature pr-1"></i> Nyilatkozatcsomag
+                                                    </button>
+                                                <?php endif; ?>
+
+                                                <?php if (
+                                                    (hasPermissions('declarations_admin_override') || hasPermissions('declarations_review_payroll'))
+                                                    && !in_array((string) $relation->status, ['closed', 'cancelled'], true)
+                                                ): ?>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger mt-1" data-toggle="modal"
+                                                        data-target="#closeRelationModal<?= (int) $relation->id ?>">
+                                                        <i class="fas fa-lock pr-1"></i> Lezárás
                                                     </button>
                                                 <?php endif; ?>
                                             </td>
@@ -305,6 +317,57 @@
     <?php endforeach; ?>
 <?php endif; ?>
 
+<?php if (!empty($relations) && (hasPermissions('declarations_admin_override') || hasPermissions('declarations_review_payroll'))): ?>
+    <?php foreach ($relations as $relation): ?>
+        <?php if (!in_array((string) $relation->status, ['closed', 'cancelled'], true)): ?>
+            <div class="modal fade" id="closeRelationModal<?= (int) $relation->id ?>" role="dialog" data-backdrop="static"
+                aria-labelledby="closeRelationModalLabel<?= (int) $relation->id ?>" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <?= form_open('declarations/persons/' . $person->id . '/relations/' . $relation->id . '/close', ['class' => 'form-validate']) ?>
+                        <?= csrf_field() ?>
+
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="closeRelationModalLabel<?= (int) $relation->id ?>">
+                                Jogviszony lezárása
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Bezárás">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+
+                        <div class="modal-body">
+                            <p class="text-muted">
+                                <?= esc($divisionNames[(int) $relation->company_id] ?? ('#' . $relation->company_id)) ?>
+                                · kezdés: <?= esc($relation->start_date ?: '-') ?>
+                            </p>
+
+                            <div class="form-group">
+                                <label for="end_date_<?= (int) $relation->id ?>" class="required">Lezárás dátuma</label>
+                                <input type="date" name="end_date" id="end_date_<?= (int) $relation->id ?>"
+                                    class="form-control" required value="<?= old('end_date', date('Y-m-d')) ?>">
+                            </div>
+
+                            <div class="alert alert-warning mb-0">
+                                A lezárt jogviszony már nem számít nyitottnak a nyilatkozatcsomag-korlátozásnál.
+                            </div>
+                        </div>
+
+                        <div class="modal-footer">
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-lock pr-1"></i> Jogviszony lezárása
+                            </button>
+                            <button type="button" class="btn btn-default" data-dismiss="modal">Mégsem</button>
+                        </div>
+
+                        <?= form_close() ?>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    <?php endforeach; ?>
+<?php endif; ?>
+
 <?php if (hasPermissions('declarations_relations_create')): ?>
     <div class="modal fade" id="createRelationModal" role="dialog" data-backdrop="static"
         aria-labelledby="createRelationModalLabel" aria-hidden="true">
@@ -381,10 +444,6 @@
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="alert alert-info">
-                        A munkakör, jogviszony típus és lezárás dátuma nem része a nyilatkozatcsomag indításának.
                     </div>
                 </div>
 

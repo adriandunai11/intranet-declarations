@@ -3,6 +3,7 @@
 namespace App\Modules\Declarations\Models;
 
 use App\Modules\Declarations\Entities\DeclarationPacket;
+use App\Modules\Declarations\Entities\EmploymentRelation;
 use CodeIgniter\Model;
 
 
@@ -69,6 +70,48 @@ class DeclarationPacketModel extends Model
         }
 
         return $builder->orderBy('id', 'DESC')->first();
+    }
+
+    public function findBlockingByPersonCompanyAndTaxYearForOpenRelations(
+        int $personId,
+        int $companyId,
+        int $taxYear,
+        ?int $excludePacketId = null
+    ) {
+        $builder = $this
+            ->select('declaration_packets.*')
+            ->join(
+                'declaration_employment_relations',
+                'declaration_employment_relations.id = declaration_packets.employment_relation_id',
+                'inner'
+            )
+            ->where('declaration_packets.person_id', $personId)
+            ->where('declaration_packets.company_id', $companyId)
+            ->groupStart()
+                ->where('declaration_packets.tax_year', $taxYear)
+                ->orWhere('declaration_packets.tax_year', null)
+            ->groupEnd()
+            ->whereIn('declaration_packets.status', [
+                DeclarationPacket::STATUS_DRAFT,
+                DeclarationPacket::STATUS_SENT,
+                DeclarationPacket::STATUS_IN_PROGRESS,
+                DeclarationPacket::STATUS_SUBMITTED,
+                DeclarationPacket::STATUS_APPROVED,
+                DeclarationPacket::STATUS_COMPLETED,
+                DeclarationPacket::STATUS_CLOSED,
+            ])
+            ->whereNotIn('declaration_employment_relations.status', [
+                EmploymentRelation::STATUS_CLOSED,
+                EmploymentRelation::STATUS_CANCELLED,
+            ]);
+
+        if ($excludePacketId !== null) {
+            $builder->where('declaration_packets.id !=', $excludePacketId);
+        }
+
+        return $builder
+            ->orderBy('declaration_packets.id', 'DESC')
+            ->first();
     }
 
     public function markAsSent(int $packetId): bool

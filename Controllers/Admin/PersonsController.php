@@ -7,7 +7,6 @@ use App\Modules\Declarations\Models\PersonModel;
 use App\Modules\Declarations\Presenters\PersonTablePresenter;
 use App\Modules\Declarations\Services\DeclarationPacketService;
 use App\Modules\Declarations\Services\EmploymentRelationService;
-use App\Modules\Declarations\Services\PersonMatchingService;
 use App\Modules\Declarations\Services\PersonService;
 use App\Modules\Declarations\Services\RecruiterService;
 use Hermawan\DataTables\DataTable;
@@ -47,25 +46,30 @@ class PersonsController extends AdminBaseController
         postAllowed();
 
         $input = $this->request->getPost();
+        $antraId = trim((string) ($input['antra_id'] ?? ''));
 
-        $matches = (new PersonMatchingService())->findPossibleMatches($input);
+        if ($antraId !== '') {
+            $existingPerson = (new PersonModel())->findByAntraId($antraId);
 
-        if ($matches !== [] && empty($input['force_create'])) {
-            return redirect()->back()
-                ->withInput()
-                ->with('possible_matches', $matches)
-                ->with('validation', ['Lehetséges visszatérő dolgozó található. Ellenőrzés után válassz: meglévő személy megnyitása vagy új személy létrehozása.']);
+            if ($existingPerson) {
+                return redirect()
+                    ->to(url('declarations/persons/' . $existingPerson->id))
+                    ->with('sSuccess', 'Ehhez az Antra azonosítóhoz már létezik személy, megnyitottuk az adatlapját.');
+            }
         }
 
         $rules = [
-            'antra_id' => 'permit_empty|trim|min_length[2]|max_length[50]|is_unique[declaration_persons.antra_id]',
+            'antra_id' => 'required|trim|min_length[2]|max_length[50]|is_unique[declaration_persons.antra_id]',
             'lastname' => 'required|trim|min_length[2]|max_length[100]',
             'firstname' => 'required|trim|min_length[2]|max_length[100]',
             'email' => 'required|trim|valid_email|max_length[190]|is_unique[declaration_persons.email]',
-            'birth_date' => 'permit_empty|valid_date[Y-m-d]',
         ];
 
         $messages = [
+            'antra_id' => [
+                'required' => 'Az Antra azonosító megadása kötelező.',
+                'is_unique' => 'Ez az Antra azonosító már létezik.',
+            ],
             'lastname' => ['required' => 'A vezetéknév megadása kötelező.'],
             'firstname' => ['required' => 'A keresztnév megadása kötelező.'],
             'email' => [
@@ -232,6 +236,34 @@ class PersonsController extends AdminBaseController
             return redirect()
                 ->to(url('declarations/persons/' . $personId))
                 ->with('sSuccess', 'Jogviszony sikeresen létrehozva.');
+        } catch (Throwable $e) {
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->withInput()
+                ->with('sError', $e->getMessage());
+        }
+    }
+
+    public function closeRelation(int $personId, int $relationId)
+    {
+        if (!hasPermissions('declarations_admin_override') && !hasPermissions('declarations_review_payroll')) {
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sError', 'Nincs jogosultságod jogviszony lezárására.');
+        }
+
+        postAllowed();
+
+        try {
+            $this->employmentRelationService->closeRelation(
+                $personId,
+                $relationId,
+                (string) $this->request->getPost('end_date')
+            );
+
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sSuccess', 'Jogviszony lezárva.');
         } catch (Throwable $e) {
             return redirect()
                 ->to(url('declarations/persons/' . $personId))

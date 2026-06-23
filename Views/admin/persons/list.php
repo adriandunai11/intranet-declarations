@@ -23,7 +23,7 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header with-border">
-                    <h3 class="card-title">Személy törzs</h3>
+                    <h3 class="card-title">Személyek</h3>
                     <div class="card-tools pull-right">
                         <?php if (hasPermissions('declarations_persons_add')): ?>
                             <a href="#createModal" data-toggle="modal" data-target="#createModal"
@@ -67,9 +67,6 @@
             </div>
             <?= form_open('declarations/persons/create', ['class' => 'form-validate', 'id' => 'createPersonForm']) ?>
             <?= csrf_field() ?>
-            <?php if (!empty($matches)): ?>
-                <input type="hidden" name="force_create" value="1">
-            <?php endif; ?>
             <div class="modal-body">
                 <?php $validation = session()->getFlashdata('validation'); ?>
                 <?php if ($validation): ?>
@@ -82,99 +79,29 @@
                     </div>
                 <?php endif; ?>
 
-                <?php $matches = session()->getFlashdata('possible_matches'); ?>
-                <?php if (!empty($matches)): ?>
-                    <div class="alert alert-warning">
-                        <h5><i class="fas fa-exclamation-triangle"></i> Lehetséges visszatérő dolgozó</h5>
-
-                        <p>
-                            A megadott adatok alapján már lehet ilyen személy a rendszerben.
-                            Ellenőrizd a találatokat, mielőtt új személyt hozol létre.
-                        </p>
-
-                        <ul class="mb-3">
-                            <?php foreach ($matches as $match): ?>
-                                <li>
-                                    <strong><?= esc($match['person']->fullName()) ?></strong>
-                                    -
-                                    <?= esc($match['reason']) ?>
-                                    -
-                                    <?= (int) $match['score'] ?>%
-
-                                    <a href="<?= url('declarations/persons/' . $match['person']->id) ?>"
-                                        class="btn btn-xs btn-default ml-2">
-                                        Megnyitás
-                                    </a>
-                                </li>
-                            <?php endforeach; ?>
-                        </ul>
-
-                        <button type="button" class="btn btn-warning btn-sm" data-toggle="modal"
-                            data-target="#createPersonModal">
-                            Ennek ellenére új személy létrehozása
-                        </button>
-                    </div>
-                <?php endif; ?>
-
                 <div class="row">
-                    <div class="col-md-6 form-group">
-                        <label for="antra_id">Antra azonosító</label>
-                        <input type="text" name="antra_id" id="antra_id" class="form-control"
+                    <div class="col-md-12 form-group">
+                        <label for="antra_id" class="required">Antra azonosító</label>
+                        <input type="text" name="antra_id" id="antra_id" required class="form-control"
                             value="<?= old('antra_id') ?>">
                     </div>
-                    <div class="col-md-6 form-group">
+                    <div class="col-md-12 form-group">
                         <label for="email" class="required">E-mail</label>
                         <input type="email" name="email" id="email" required class="form-control"
                             value="<?= old('email') ?>">
                     </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6 form-group">
+                    <div class="col-md-12 form-group">
                         <label for="lastname" class="required">Vezetéknév</label>
                         <input type="text" name="lastname" id="lastname" required class="form-control"
                             value="<?= old('lastname') ?>">
                     </div>
-                    <div class="col-md-6 form-group">
+                    <div class="col-md-12 form-group">
                         <label for="firstname" class="required">Keresztnév</label>
                         <input type="text" name="firstname" id="firstname" required class="form-control"
                             value="<?= old('firstname') ?>">
                     </div>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-6 form-group">
-                        <label for="birth_name">Születési név</label>
-                        <input type="text" name="birth_name" id="birth_name" class="form-control"
-                            value="<?= old('birth_name') ?>">
-                    </div>
-                    <div class="col-md-6 form-group">
-                        <label for="mother_name">Anyja neve</label>
-                        <input type="text" name="mother_name" id="mother_name" class="form-control"
-                            value="<?= old('mother_name') ?>">
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-4 form-group">
-                        <label for="birth_place">Születési hely</label>
-                        <input type="text" name="birth_place" id="birth_place" class="form-control"
-                            value="<?= old('birth_place') ?>">
-                    </div>
-                    <div class="col-md-4 form-group">
-                        <label for="birth_date">Születési dátum</label>
-                        <input type="date" name="birth_date" id="birth_date" class="form-control"
-                            value="<?= old('birth_date') ?>">
-                    </div>
-                    <div class="col-md-4 form-group">
-                        <label for="phone">Telefonszám</label>
-                        <input type="text" name="phone" id="phone" class="form-control" value="<?= old('phone') ?>">
-                    </div>
-                </div>
-
-                <div class="alert alert-info">
-                    A TAJ számot és az adóazonosító jelet a beálló adja meg a nyilatkozatkitöltő felületen.
-                </div>
             </div>
             <div class="modal-footer">
                 <button type="submit" class="btn btn-default">Mentés</button>
@@ -186,7 +113,8 @@
 
 
 <?php if (hasPermissions('declarations_persons_edit')): ?>
-    <div class="modal fade" id="editPersonModal" role="dialog" data-backdrop="static" aria-labelledby="editPersonModalLabel" aria-hidden="true">
+    <div class="modal fade" id="editPersonModal" role="dialog" data-backdrop="static" aria-labelledby="editPersonModalLabel"
+        aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
                 <div class="modal-header">
@@ -239,11 +167,16 @@
                             <label for="edit_birth_date">Születési dátum</label>
                             <input type="date" name="birth_date" id="edit_birth_date" class="form-control">
                         </div>
-                    </div>
 
-                    <div class="alert alert-info">
-                        A TAJ számot és az adóazonosító jelet a beálló adja meg a public nyilatkozatkitöltő felületen.
-                        Itt nem módosítjuk ezeket az adatokat, hogy véletlenül se írjuk felül.
+                        <div class="col-md-4 form-group">
+                            <label for="edit_tax_number">Adóazonosító</label>
+                            <input type="text" name="tax_number" id="edit_tax_number" class="form-control">
+                        </div>
+
+                        <div class="col-md-4 form-group">
+                            <label for="edit_taj_number">TAJ szám</label>
+                            <input type="text" name="taj_number" id="edit_taj_number" class="form-control">
+                        </div>
                     </div>
 
                     <div class="row">
@@ -346,6 +279,10 @@
             $('#edit_mother_name').val(button.data('mother-name') || '');
             $('#edit_birth_place').val(button.data('birth-place') || '');
             $('#edit_birth_date').val(button.data('birth-date') || '');
+            $('#edit_tax_number').val(button.data('tax-number') || '');
+
+            $('#edit_taj_number').val(button.data('taj-number') || '');
+
             $('#edit_email').val(button.data('email') || '');
             $('#edit_phone').val(button.data('phone') || '');
             $('#edit_status').val(button.data('status') || 'active');
