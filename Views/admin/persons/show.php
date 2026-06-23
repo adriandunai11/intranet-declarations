@@ -111,6 +111,14 @@
                                 </thead>
                                 <tbody>
                                     <?php foreach ($relations as $relation): ?>
+                                        <?php
+                                        $relationId = (int) $relation->id;
+                                        $companyYearKey = (int) $relation->company_id . ':' . (int) date('Y');
+                                        $hasSentPacket = !empty($sentPacketRelationIds[$relationId])
+                                            || !empty($sentPacketCompanyYearKeys[$companyYearKey]);
+                                        $draftPacket = $draftPacketsByRelationId[$relationId] ?? null;
+                                        $isClosedRelation = in_array((string) $relation->status, ['closed', 'cancelled'], true);
+                                        ?>
                                         <tr>
                                             <td><?= esc($divisionNames[(int) $relation->company_id] ?? ('#' . $relation->company_id)) ?>
                                             </td>
@@ -147,21 +155,37 @@
                                             <td><?= esc($relation->start_date ?: '-') ?></td>
                                             <td><?= esc($relation->end_date ?: '-') ?></td>
                                             <td>
-                                                <?php if (hasPermissions('declarations_packets_create')): ?>
+                                                <?php if ($hasSentPacket): ?>
+                                                    <span class="badge badge-info d-block mb-1">Csomag kiküldve</span>
+                                                <?php elseif ($draftPacket): ?>
+                                                    <a href="<?= url('declarations/packets/' . $draftPacket->id) ?>" class="btn btn-sm btn-default">
+                                                        <i class="fas fa-file-signature pr-1"></i> Piszkozat megnyitása
+                                                    </a>
+                                                <?php elseif (hasPermissions('declarations_packets_create') && !$isClosedRelation): ?>
                                                     <button type="button" class="btn btn-sm btn-default" data-toggle="modal"
-                                                        data-target="#createPacketModal<?= (int) $relation->id ?>">
+                                                        data-target="#createPacketModal<?= $relationId ?>">
                                                         <i class="fas fa-file-signature pr-1"></i> Nyilatkozatcsomag
                                                     </button>
                                                 <?php endif; ?>
 
                                                 <?php if (
                                                     (hasPermissions('declarations_admin_override') || hasPermissions('declarations_review_payroll'))
-                                                    && !in_array((string) $relation->status, ['closed', 'cancelled'], true)
+                                                    && !$isClosedRelation
                                                 ): ?>
                                                     <button type="button" class="btn btn-sm btn-outline-danger mt-1" data-toggle="modal"
-                                                        data-target="#closeRelationModal<?= (int) $relation->id ?>">
+                                                        data-target="#closeRelationModal<?= $relationId ?>">
                                                         <i class="fas fa-lock pr-1"></i> Lezárás
                                                     </button>
+                                                <?php endif; ?>
+
+                                                <?php if (hasPermissions('declarations_admin_override') && (string) $relation->status === 'closed'): ?>
+                                                    <?= form_open('declarations/persons/' . $person->id . '/relations/' . $relationId . '/reopen', ['class' => 'd-inline-block mt-1']) ?>
+                                                    <?= csrf_field() ?>
+                                                    <button type="submit" class="btn btn-sm btn-outline-warning"
+                                                        onclick="return confirm('Biztosan visszanyitod ezt a jogviszonyt?')">
+                                                        <i class="fas fa-unlock pr-1"></i> Visszanyitás
+                                                    </button>
+                                                    <?= form_close() ?>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
@@ -231,6 +255,17 @@
 
 <?php if (!empty($relations) && hasPermissions('declarations_packets_create')): ?>
     <?php foreach ($relations as $relation): ?>
+        <?php
+        $relationId = (int) $relation->id;
+        $companyYearKey = (int) $relation->company_id . ':' . (int) date('Y');
+        $hasSentPacket = !empty($sentPacketRelationIds[$relationId])
+            || !empty($sentPacketCompanyYearKeys[$companyYearKey]);
+        $draftPacket = $draftPacketsByRelationId[$relationId] ?? null;
+        $isClosedRelation = in_array((string) $relation->status, ['closed', 'cancelled'], true);
+        ?>
+        <?php if ($hasSentPacket || $draftPacket || $isClosedRelation): ?>
+            <?php continue; ?>
+        <?php endif; ?>
         <div class="modal fade" id="createPacketModal<?= (int) $relation->id ?>" role="dialog" data-backdrop="static"
             aria-labelledby="createPacketModalLabel<?= (int) $relation->id ?>" aria-hidden="true">
             <div class="modal-dialog modal-lg" role="document">

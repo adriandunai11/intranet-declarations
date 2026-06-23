@@ -90,4 +90,12 @@ class EmploymentRelationModel extends Model
             'end_date' => $endDate,
         ]);
     }
+
+    public function reopen(int $relationId, string $status = EmploymentRelation::STATUS_ONBOARDING): bool
+    {
+        return $this->update($relationId, [
+            'status' => $status,
+            'end_date' => null,
+        ]);
+    }
 }

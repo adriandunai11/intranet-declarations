@@ -15,6 +15,18 @@
             <p class="lead">Beküldés ideje: <strong><?= esc($submission->submitted_at) ?></strong></p>
         <?php endif; ?>
 
+        <?php if (!empty($displayRows)): ?>
+            <div class="info-card">
+                <div class="info-title">Beküldött adatok</div>
+                <dl class="summary-list">
+                    <?php foreach ($displayRows as $label => $value): ?>
+                        <dt><?= esc($label) ?></dt>
+                        <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                    <?php endforeach; ?>
+                </dl>
+            </div>
+        <?php endif; ?>
+
         <div class="actions">
             <a href="<?= esc($startUrl) ?>" class="btn btn-secondary">Vissza a dokumentumokhoz</a>
         </div>

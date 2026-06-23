@@ -123,6 +123,41 @@
         </div>
 
         <div class="col-lg-8">
+            <?php if (!empty($canEditPacketItems)): ?>
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0">Nyilatkozatcsomag szerkesztése</h3>
+                    </div>
+
+                    <div class="card-body">
+                        <?php if (empty($editableTemplates ?? [])): ?>
+                            <p class="text-muted mb-0">
+                                Nincs további hozzáadható online kitölthető nyilatkozat.
+                            </p>
+                        <?php else: ?>
+                            <?= form_open('declarations/packets/' . $packet->id . '/items/add', ['class' => 'form-inline']) ?>
+                            <?= csrf_field() ?>
+
+                            <label for="add_template_id" class="mr-2">Kimaradt nyilatkozat</label>
+                            <select name="template_id" id="add_template_id" class="form-control mr-2 mb-2" required>
+                                <option value="">Válassz nyilatkozatot...</option>
+                                <?php foreach ($editableTemplates as $template): ?>
+                                    <option value="<?= (int) $template->id ?>">
+                                        <?= esc($template->displayName()) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+
+                            <button type="submit" class="btn btn-default mb-2">
+                                <i class="fas fa-plus pr-1"></i> Hozzáadás
+                            </button>
+
+                            <?= form_close() ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">

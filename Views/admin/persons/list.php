@@ -68,6 +68,8 @@
             <?= form_open('declarations/persons/create', ['class' => 'form-validate', 'id' => 'createPersonForm']) ?>
             <?= csrf_field() ?>
             <div class="modal-body">
+                <div class="js-form-alert"></div>
+
                 <?php $validation = session()->getFlashdata('validation'); ?>
                 <?php if ($validation): ?>
                     <div class="alert alert-danger">
@@ -128,6 +130,8 @@
                 <?= csrf_field() ?>
 
                 <div class="modal-body">
+                    <div class="js-form-alert"></div>
+
                     <div class="row">
                         <div class="col-md-4 form-group">
                             <label for="edit_antra_id">Antra azonosító</label>
@@ -228,6 +232,47 @@
 
 <script>
     $(document).ready(function () {
+        var csrfName = '<?= csrf_token() ?>';
+        var csrfHash = '<?= csrf_hash() ?>';
+
+        function updateCsrf(response) {
+            if (response && response.csrfHash) {
+                csrfHash = response.csrfHash;
+                $('input[name="' + csrfName + '"]').val(csrfHash);
+            }
+        }
+
+        function showFormAlert(form, type, messages) {
+            var alert = form.find('.js-form-alert');
+            var list = Array.isArray(messages) ? messages : [messages];
+            var html = '<div class="alert alert-' + type + '"><ul class="mb-0">';
+
+            list.forEach(function (message) {
+                html += '<li>' + $('<div>').text(message || '').html() + '</li>';
+            });
+
+            html += '</ul></div>';
+            alert.html(html);
+        }
+
+        function responseMessages(response, fallback) {
+            if (response && response.warning) {
+                return [response.warning];
+            }
+
+            if (response && response.errors) {
+                if (Array.isArray(response.errors)) {
+                    return response.errors;
+                }
+
+                return Object.keys(response.errors).map(function (key) {
+                    return response.errors[key];
+                });
+            }
+
+            return [fallback || 'Hiba történt a művelet közben.'];
+        }
+
         var table = $('#dataTable1').DataTable({
             processing: true,
             serverSide: true,
@@ -239,7 +284,7 @@
                 url: '<?= url('declarations/persons/datatable') ?>',
                 type: 'POST',
                 data: function (d) {
-                    d['<?= csrf_token() ?>'] = '<?= csrf_hash() ?>';
+                    d[csrfName] = csrfHash;
                     return d;
                 }
             },
@@ -266,32 +311,111 @@
 
         $(document).on('click', '.js-edit-person', function () {
             var button = $(this);
+            var personId = button.data('id');
+            var form = $('#editPersonForm');
 
-            $('#editPersonForm').attr(
-                'action',
-                '<?= url('declarations/persons') ?>/' + button.data('id') + '/update'
-            );
+            form.find('.js-form-alert').empty();
+            form.attr('action', '<?= url('declarations/persons') ?>/' + personId + '/update');
 
-            $('#edit_antra_id').val(button.data('antra-id') || '');
-            $('#edit_lastname').val(button.data('lastname') || '');
-            $('#edit_firstname').val(button.data('firstname') || '');
-            $('#edit_birth_name').val(button.data('birth-name') || '');
-            $('#edit_mother_name').val(button.data('mother-name') || '');
-            $('#edit_birth_place').val(button.data('birth-place') || '');
-            $('#edit_birth_date').val(button.data('birth-date') || '');
-            $('#edit_tax_number').val(button.data('tax-number') || '');
+            $.get('<?= url('declarations/persons') ?>/' + personId + '/json')
+                .done(function (response) {
+                    var person = response.person || {};
 
-            $('#edit_taj_number').val(button.data('taj-number') || '');
+                    $('#edit_antra_id').val(person.antra_id || '');
+                    $('#edit_lastname').val(person.lastname || '');
+                    $('#edit_firstname').val(person.firstname || '');
+                    $('#edit_birth_name').val(person.birth_name || '');
+                    $('#edit_mother_name').val(person.mother_name || '');
+                    $('#edit_birth_place').val(person.birth_place || '');
+                    $('#edit_birth_date').val(person.birth_date || '');
+                    $('#edit_tax_number').val(person.tax_number || '');
+                    $('#edit_taj_number').val(person.taj_number || '');
+                    $('#edit_email').val(person.email || '');
+                    $('#edit_phone').val(person.phone || '');
+                    $('#edit_status').val(person.status || 'active');
 
-            $('#edit_email').val(button.data('email') || '');
-            $('#edit_phone').val(button.data('phone') || '');
-            $('#edit_status').val(button.data('status') || 'active');
-
-            $('#editPersonModal').modal('show');
+                    $('#editPersonModal').modal('show');
+                })
+                .fail(function (xhr) {
+                    alert(responseMessages(xhr.responseJSON, 'A személy friss adatai nem tölthetők be.').join('\n'));
+                });
         });
 
         $('#editPersonForm').validate();
         $('#createPersonForm').validate();
+
+        $('#createPersonForm').on('submit', function (event) {
+            event.preventDefault();
+
+            var form = $(this);
+
+            if (!form.valid()) {
+                return;
+            }
+
+            form.find('input[name="' + csrfName + '"]').val(csrfHash);
+            form.find('.js-form-alert').empty();
+            form.find('button[type="submit"]').prop('disabled', true);
+
+            $.ajax({
+                url: form.attr('action'),
+                method: 'POST',
+                data: form.serialize(),
+                dataType: 'json'
+            }).done(function (response) {
+                updateCsrf(response);
+
+                if (response.success) {
+                    form[0].reset();
+                    $('#createModal').modal('hide');
+                    table.ajax.reload(null, false);
+                    return;
+                }
+
+                showFormAlert(form, response.warning ? 'warning' : 'danger', responseMessages(response));
+            }).fail(function (xhr) {
+                updateCsrf(xhr.responseJSON);
+                showFormAlert(form, xhr.status === 409 ? 'warning' : 'danger', responseMessages(xhr.responseJSON));
+            }).always(function () {
+                form.find('button[type="submit"]').prop('disabled', false);
+            });
+        });
+
+        $('#editPersonForm').on('submit', function (event) {
+            event.preventDefault();
+
+            var form = $(this);
+
+            if (!form.valid()) {
+                return;
+            }
+
+            form.find('input[name="' + csrfName + '"]').val(csrfHash);
+            form.find('.js-form-alert').empty();
+            form.find('button[type="submit"]').prop('disabled', true);
+
+            $.ajax({
+                url: form.attr('action'),
+                method: 'POST',
+                data: form.serialize(),
+                dataType: 'json'
+            }).done(function (response) {
+                updateCsrf(response);
+
+                if (response.success) {
+                    $('#editPersonModal').modal('hide');
+                    table.ajax.reload(null, false);
+                    return;
+                }
+
+                showFormAlert(form, 'danger', responseMessages(response));
+            }).fail(function (xhr) {
+                updateCsrf(xhr.responseJSON);
+                showFormAlert(form, 'danger', responseMessages(xhr.responseJSON));
+            }).always(function () {
+                form.find('button[type="submit"]').prop('disabled', false);
+            });
+        });
     });
 </script>
 <?= $this->endSection() ?>

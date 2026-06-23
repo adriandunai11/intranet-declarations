@@ -570,18 +570,117 @@ class DeclarationPacketService
                     (string) ($item->template_code ?? ''),
                     $submission
                 ),
-                'can_review' => $this->reviewAuthorizationService->canReviewItem(
-                    $packet,
-                    $details['relation'] ?? null,
-                    $item
-                ),
+                'can_review' => (string) $packet->status === DeclarationPacket::STATUS_SUBMITTED
+                    && $this->reviewAuthorizationService->canReviewItem(
+                        $packet,
+                        $details['relation'] ?? null,
+                        $item
+                    ),
             ];
         }
 
         $details['reviewItems'] = $reviewItems;
         $details['auditLogs'] = $this->auditLogModel->findByPacketId((int) $packet->id, 30);
+        $details['canEditPacketItems'] = $this->canEditPacketItems($packet);
+        $details['editableTemplates'] = $details['canEditPacketItems']
+            ? $this->getEditableTemplatesForPacket((int) $packet->id)
+            : [];
 
         return $details;
+    }
+
+    public function canEditPacketItems(object $packet): bool
+    {
+        return in_array((string) $packet->status, [
+            DeclarationPacket::STATUS_DRAFT,
+            DeclarationPacket::STATUS_SENT,
+            DeclarationPacket::STATUS_IN_PROGRESS,
+        ], true);
+    }
+
+    public function getEditableTemplatesForPacket(int $packetId): array
+    {
+        $packet = $this->findPacket($packetId);
+
+        if (!$this->canEditPacketItems($packet)) {
+            return [];
+        }
+
+        $taxYear = !empty($packet->tax_year) ? (int) $packet->tax_year : null;
+        $templates = $this->templateModel->findActiveForYear($taxYear);
+        $items = $this->itemModel->findByPacketId((int) $packet->id);
+        $existingTemplateIds = [];
+
+        foreach ($items as $item) {
+            $existingTemplateIds[(int) $item->template_id] = true;
+        }
+
+        return array_values(array_filter($templates, function ($template) use ($existingTemplateIds): bool {
+            return empty($existingTemplateIds[(int) $template->id])
+                && $this->formRegistry->hasConcreteHandlerForCode((string) ($template->code ?? ''));
+        }));
+    }
+
+    public function addTemplateToPacket(int $packetId, int $templateId): int
+    {
+        $packet = $this->findPacket($packetId);
+
+        if (!$this->canEditPacketItems($packet)) {
+            throw new RuntimeException('A nyilatkozatcsomag már be lett küldve, ezért nem szerkeszthető.');
+        }
+
+        $template = $this->templateModel->find($templateId);
+
+        if (!$template || !$template->isActive()) {
+            throw new RuntimeException('A kiválasztott nyilatkozat nem található vagy nem aktív.');
+        }
+
+        if (!$this->formRegistry->hasConcreteHandlerForCode((string) $template->code)) {
+            throw new RuntimeException('A kiválasztott nyilatkozat még nem tölthető ki online: ' . ($template->name ?: $template->code));
+        }
+
+        if (!empty($packet->tax_year) && !empty($template->tax_year) && (int) $packet->tax_year !== (int) $template->tax_year) {
+            throw new RuntimeException('A kiválasztott nyilatkozat adóéve nem egyezik a csomag adóévével.');
+        }
+
+        $existingItem = $this->itemModel->findByPacketAndTemplateId((int) $packet->id, (int) $template->id);
+
+        if ($existingItem) {
+            return (int) $existingItem->id;
+        }
+
+        $itemId = $this->itemModel->insert([
+            'packet_id' => (int) $packet->id,
+            'template_id' => (int) $template->id,
+            'status' => DeclarationPacketItem::STATUS_PENDING,
+            'sort_order' => $this->itemModel->nextSortOrderForPacket((int) $packet->id),
+        ], true);
+
+        if (!$itemId) {
+            $errors = $this->itemModel->errors();
+
+            throw new RuntimeException(!empty($errors) ? implode(' ', $errors) : 'A nyilatkozat hozzáadása sikertelen.');
+        }
+
+        $this->auditLogModel->logAction(
+            'packet_item_added_by_admin',
+            'declaration_packet_item',
+            (int) $itemId,
+            (int) $packet->id,
+            (int) $itemId,
+            null,
+            DeclarationPacketItem::STATUS_PENDING,
+            'Nyilatkozat hozzáadva a csomaghoz.',
+            [
+                'person_id' => (int) $packet->person_id,
+                'employment_relation_id' => (int) $packet->employment_relation_id,
+                'template_id' => (int) $template->id,
+                'template_code' => $template->code ?? null,
+                'template_name' => $template->name ?? null,
+            ]
+        );
+
+        return (int) $itemId;
     }
 
 

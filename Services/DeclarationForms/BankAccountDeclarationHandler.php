@@ -49,8 +49,35 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
             throw new RuntimeException('A bankszámlaszámnak 16 vagy 24 számjegyből kell állnia.');
         }
 
+        if (!$this->isValidHungarianBankAccountNumber((string) ($data['bank_account_number'] ?? ''))) {
+            throw new RuntimeException('A bankszámlaszám ellenőrző száma hibás.');
+        }
+
         if ((int) ($data['confirm_truth'] ?? 0) !== 1) {
             throw new RuntimeException('A beküldéshez el kell fogadni a valóságtartalomról szóló nyilatkozatot.');
         }
+    }
+
+    private function isValidHungarianBankAccountNumber(string $value): bool
+    {
+        if (!preg_match('/^\d{16}(\d{8})?$/', $value)) {
+            return false;
+        }
+
+        $weights = [9, 7, 3, 1, 9, 7, 3, 1];
+
+        foreach (str_split($value, 8) as $block) {
+            $sum = 0;
+
+            for ($i = 0; $i < 8; $i++) {
+                $sum += ((int) $block[$i]) * $weights[$i];
+            }
+
+            if ($sum % 10 !== 0) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

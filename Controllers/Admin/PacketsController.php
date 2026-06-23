@@ -58,6 +58,35 @@ class PacketsController extends AdminBaseController
         }
     }
 
+    public function addItem(int $packetId)
+    {
+        if (!hasPermissions('declarations_admin_override') && !hasPermissions('declarations_packets_create')) {
+            return redirect()
+                ->to(url('declarations/packets/' . $packetId))
+                ->with('sError', 'Nincs jogosultságod nyilatkozat hozzáadására.');
+        }
+
+        postAllowed();
+
+        try {
+            $templateId = (int) $this->request->getPost('template_id');
+
+            if ($templateId <= 0) {
+                throw new \RuntimeException('Válassz hozzáadandó nyilatkozatot.');
+            }
+
+            $this->declarationPacketService->addTemplateToPacket($packetId, $templateId);
+
+            return redirect()
+                ->to(url('declarations/packets/' . $packetId))
+                ->with('sSuccess', 'A nyilatkozat hozzáadva a csomaghoz.');
+        } catch (Throwable $e) {
+            return redirect()
+                ->to(url('declarations/packets/' . $packetId))
+                ->with('sError', $e->getMessage());
+        }
+    }
+
     public function acceptItem(int $packetId, int $itemId)
     {
         if (

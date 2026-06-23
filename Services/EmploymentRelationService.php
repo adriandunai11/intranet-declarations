@@ -171,6 +171,37 @@ class EmploymentRelationService
         ]);
     }
 
+    public function reopenRelation(int $personId, int $relationId): void
+    {
+        $relation = $this->relationModel->find($relationId);
+
+        if (!$relation || (int) $relation->person_id !== $personId) {
+            throw new RuntimeException('A jogviszony nem található ennél a személynél.');
+        }
+
+        if ((string) $relation->status !== EmploymentRelation::STATUS_CLOSED) {
+            throw new RuntimeException('Csak lezárt jogviszony nyitható vissza.');
+        }
+
+        $oldStatus = (string) $relation->status;
+
+        if (!$this->relationModel->reopen($relationId)) {
+            $errors = $this->relationModel->errors();
+
+            throw new RuntimeException(!empty($errors) ? implode(' ', $errors) : 'A jogviszony visszanyitása sikertelen.');
+        }
+
+        $this->auditService->log('employment_relation_reopened', 'employment_relation', $relationId, [
+            'person_id' => $personId,
+            'employment_relation_id' => $relationId,
+            'old_status' => $oldStatus,
+            'new_status' => EmploymentRelation::STATUS_ONBOARDING,
+            'payload' => [
+                'old_end_date' => $relation->end_date ?? null,
+            ],
+        ]);
+    }
+
 
     public function getRecruiters(): array
     {

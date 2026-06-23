@@ -23,6 +23,11 @@ class PublicUrlService
         return $this->start($token) . '/verify-antra';
     }
 
+    public function finalize(string $token): string
+    {
+        return $this->start($token) . '/finalize';
+    }
+
     public function item(string $token, int $itemId): string
     {
         return $this->start($token) . '/item/' . $itemId;

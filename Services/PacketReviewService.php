@@ -369,57 +369,6 @@ class PacketReviewService
             ]
         );
 
-        if (!empty($packet->employment_relation_id)) {
-            $relation = $this->relationModel->find((int) $packet->employment_relation_id);
-            $oldRelationStatus = $relation ? (string) $relation->status : null;
-
-            $this->relationModel->updateStatus(
-                (int) $packet->employment_relation_id,
-                EmploymentRelation::STATUS_COMPLETED
-            );
-
-            $this->auditLogModel->logAction(
-                DeclarationAuditLogModel::ACTION_RELATION_STATUS_CHANGED,
-                'declaration_employment_relation',
-                (int) $packet->employment_relation_id,
-                $packetId,
-                null,
-                $oldRelationStatus,
-                EmploymentRelation::STATUS_COMPLETED,
-                'Minden kötelező nyilatkozat elfogadásra került.',
-                [
-                    'person_id' => (int) $packet->person_id,
-                    'employment_relation_id' => (int) $packet->employment_relation_id,
-                ]
-            );
-        }
-
-        $activeInvitation = $this->invitationModel->findActiveByPacketId($packetId);
-
-        if ($activeInvitation) {
-            $oldInvitationStatus = (string) $activeInvitation->status;
-
-            $this->invitationModel->update((int) $activeInvitation->id, [
-                'status' => DeclarationInvitation::STATUS_COMPLETED,
-                'completed_at' => date('Y-m-d H:i:s'),
-            ]);
-
-            $this->auditLogModel->logAction(
-                DeclarationAuditLogModel::ACTION_INVITATION_COMPLETED,
-                'declaration_invitation',
-                (int) $activeInvitation->id,
-                $packetId,
-                null,
-                $oldInvitationStatus,
-                DeclarationInvitation::STATUS_COMPLETED,
-                'A nyilatkozatcsomag elfogadása után a meghívó lezárásra került.',
-                [
-                    'person_id' => (int) $packet->person_id,
-                    'employment_relation_id' => (int) $packet->employment_relation_id,
-                    'invitation_id' => (int) $activeInvitation->id,
-                ]
-            );
-        }
     }
 
     private function allRequiredItemsAccepted(int $packetId): bool

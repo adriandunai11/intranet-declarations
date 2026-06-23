@@ -55,13 +55,51 @@ class PersonalDataDeclarationHandler implements DeclarationFormHandlerInterface
             throw new RuntimeException('Az adóazonosító jelnek pontosan 10 számjegyből kell állnia.');
         }
 
+        if (!$this->isValidTaxNumber((string) ($data['tax_number'] ?? ''))) {
+            throw new RuntimeException('Az adóazonosító jel ellenőrző száma hibás.');
+        }
+
         if (strlen((string) ($data['taj_number'] ?? '')) !== 9) {
             throw new RuntimeException('A TAJ számnak pontosan 9 számjegyből kell állnia.');
+        }
+
+        if (!$this->isValidTajNumber((string) ($data['taj_number'] ?? ''))) {
+            throw new RuntimeException('A TAJ szám ellenőrző száma hibás.');
         }
 
         if ((int) ($data['confirm_truth'] ?? 0) !== 1) {
             throw new RuntimeException('A beküldéshez el kell fogadni a valóságtartalomról szóló nyilatkozatot.');
         }
+    }
+
+    private function isValidTaxNumber(string $value): bool
+    {
+        if (!preg_match('/^\d{10}$/', $value) || $value[0] !== '8') {
+            return false;
+        }
+
+        $sum = 0;
+
+        for ($i = 0; $i < 9; $i++) {
+            $sum += ((int) $value[$i]) * ($i + 1);
+        }
+
+        return $sum % 11 === (int) $value[9];
+    }
+
+    private function isValidTajNumber(string $value): bool
+    {
+        if (!preg_match('/^\d{9}$/', $value)) {
+            return false;
+        }
+
+        $sum = 0;
+
+        for ($i = 0; $i < 8; $i++) {
+            $sum += ((int) $value[$i]) * (($i % 2 === 0) ? 3 : 7);
+        }
+
+        return $sum % 10 === (int) $value[8];
     }
 
     private function cleanText($value): string

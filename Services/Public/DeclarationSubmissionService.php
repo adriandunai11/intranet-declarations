@@ -3,7 +3,9 @@
 namespace App\Modules\Declarations\Services\Public;
 
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
+use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationSubmission;
+use App\Modules\Declarations\Entities\DeclarationTemplate;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationSubmissionModel;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
@@ -53,12 +55,71 @@ class DeclarationSubmissionService
         return $this->submissionModel->findByPacketItemId($itemId);
     }
 
-    public function isClosed(object $item): bool
+    public function isClosed(object $item, ?object $packet = null): bool
     {
+        if ((string) $item->status === DeclarationPacketItem::STATUS_ACCEPTED) {
+            return true;
+        }
+
+        if (
+            (string) $item->status === DeclarationPacketItem::STATUS_COMPLETED
+            && $packet
+            && in_array((string) $packet->status, [
+                DeclarationPacket::STATUS_DRAFT,
+                DeclarationPacket::STATUS_SENT,
+                DeclarationPacket::STATUS_IN_PROGRESS,
+            ], true)
+        ) {
+            return false;
+        }
+
         return in_array((string) $item->status, [
             DeclarationPacketItem::STATUS_COMPLETED,
-            DeclarationPacketItem::STATUS_ACCEPTED,
         ], true);
+    }
+
+    public function submissionsByItemId(int $packetId): array
+    {
+        return $this->submissionModel->findByPacketIdIndexedByItemId($packetId);
+    }
+
+    public function allRequiredItemsCompleted(InvitationContext $context): bool
+    {
+        foreach ($this->getItemsForContext($context) as $item) {
+            $requiredPolicy = (string) ($item->template_required_policy ?? '');
+            $isCandidateSelectable = (int) ($item->template_is_candidate_selectable ?? 0) === 1;
+
+            if ($requiredPolicy === DeclarationTemplate::REQUIRED_OPTIONAL || $isCandidateSelectable) {
+                continue;
+            }
+
+            if (!in_array((string) $item->status, [
+                DeclarationPacketItem::STATUS_COMPLETED,
+                DeclarationPacketItem::STATUS_ACCEPTED,
+            ], true)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public function canFinalize(InvitationContext $context): bool
+    {
+        return in_array((string) $context->packet->status, [
+            DeclarationPacket::STATUS_DRAFT,
+            DeclarationPacket::STATUS_SENT,
+            DeclarationPacket::STATUS_IN_PROGRESS,
+        ], true) && $this->allRequiredItemsCompleted($context);
+    }
+
+    public function finalize(InvitationContext $context): void
+    {
+        if (!$this->canFinalize($context)) {
+            throw new \RuntimeException('A végleges beküldéshez minden kötelező dokumentumot ki kell tölteni.');
+        }
+
+        $this->workflowService->submitPacketIfReady($context);
     }
 
     public function submit(
@@ -67,7 +128,7 @@ class DeclarationSubmissionService
         DeclarationFormHandlerInterface $handler,
         IncomingRequest $request
     ): void {
-        if ($this->isClosed($item)) {
+        if ($this->isClosed($item, $context->packet)) {
             throw new DeclarationAlreadySubmittedException('Ezt a nyilatkozatot már beküldted.');
         }
 
@@ -99,14 +160,16 @@ class DeclarationSubmissionService
 
             if (
                 $existingSubmission && in_array((string) $item->status, [
-                    DeclarationPacketItem::STATUS_COMPLETED,
                     DeclarationPacketItem::STATUS_ACCEPTED,
                 ], true)
             ) {
                 throw new DeclarationAlreadySubmittedException('Ezt a nyilatkozatot már beküldted.');
             }
 
-            if ($existingSubmission && (string) $item->status === DeclarationPacketItem::STATUS_REJECTED) {
+            if ($existingSubmission && in_array((string) $item->status, [
+                DeclarationPacketItem::STATUS_REJECTED,
+                DeclarationPacketItem::STATUS_COMPLETED,
+            ], true)) {
                 if (!$this->submissionModel->markAsSubmittedAgain((int) $existingSubmission->id, $data)) {
                     $errors = $this->submissionModel->errors();
 

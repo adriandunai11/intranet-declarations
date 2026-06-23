@@ -52,9 +52,19 @@ class PersonsController extends AdminBaseController
             $existingPerson = (new PersonModel())->findByAntraId($antraId);
 
             if ($existingPerson) {
-                return redirect()
-                    ->to(url('declarations/persons/' . $existingPerson->id))
-                    ->with('sSuccess', 'Ehhez az Antra azonosítóhoz már létezik személy, megnyitottuk az adatlapját.');
+                $message = 'Ehhez az Antra azonosítóhoz már létezik személy: ' . $existingPerson->fullName() . '.';
+
+                if ($this->request->isAJAX()) {
+                    return $this->jsonResponse([
+                        'success' => false,
+                        'warning' => $message,
+                        'person_id' => (int) $existingPerson->id,
+                    ], 409);
+                }
+
+                return redirect()->back()
+                    ->withInput()
+                    ->with('validation', [$message]);
             }
         }
 
@@ -80,6 +90,13 @@ class PersonsController extends AdminBaseController
         ];
 
         if (!$this->validate($rules, $messages)) {
+            if ($this->request->isAJAX()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'errors' => $this->validator->getErrors(),
+                ], 422);
+            }
+
             return redirect()->back()
                 ->withInput()
                 ->with('validation', $this->validator->getErrors());
@@ -88,9 +105,24 @@ class PersonsController extends AdminBaseController
         try {
             $personId = $this->personService->create($input);
 
+            if ($this->request->isAJAX()) {
+                return $this->jsonResponse([
+                    'success' => true,
+                    'person_id' => $personId,
+                    'message' => 'Személy létrehozva.',
+                ]);
+            }
+
             return redirect()->to(url('declarations/persons/' . $personId))
                 ->with('sSuccess', 'Személy létrehozva. A következő lépésben jogviszonyt és nyilatkozatcsomagot lehet indítani.');
         } catch (Throwable $e) {
+            if ($this->request->isAJAX()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'errors' => [$this->mapDuplicateError($e->getMessage())],
+                ], 422);
+            }
+
             return redirect()->back()
                 ->withInput()
                 ->with('validation', [$this->mapDuplicateError($e->getMessage())]);
@@ -112,6 +144,13 @@ class PersonsController extends AdminBaseController
         ];
 
         if (!$this->validate($rules)) {
+            if ($this->request->isAJAX()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'errors' => $this->validator->getErrors(),
+                ], 422);
+            }
+
             return redirect()
                 ->to(url('declarations/persons'))
                 ->withInput()
@@ -121,10 +160,25 @@ class PersonsController extends AdminBaseController
         try {
             $this->personService->update($id, $this->request->getPost());
 
+            if ($this->request->isAJAX()) {
+                return $this->jsonResponse([
+                    'success' => true,
+                    'message' => 'A személy adatai frissítve.',
+                    'person' => $this->personPayload($this->personService->find($id)),
+                ]);
+            }
+
             return redirect()
                 ->to(url('declarations/persons'))
                 ->with('sSuccess', 'A személy adatai frissítve.');
         } catch (Throwable $e) {
+            if ($this->request->isAJAX()) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'errors' => [$this->mapDuplicateError($e->getMessage())],
+                ], 422);
+            }
+
             return redirect()
                 ->to(url('declarations/persons'))
                 ->withInput()
@@ -191,6 +245,25 @@ class PersonsController extends AdminBaseController
             ->toJson(true);
     }
 
+    public function json(int $id)
+    {
+        $this->permissionCheck('declarations_persons_list');
+
+        $person = $this->personService->find($id);
+
+        if (!$person) {
+            return $this->jsonResponse([
+                'success' => false,
+                'errors' => ['A keresett személy nem található.'],
+            ], 404);
+        }
+
+        return $this->jsonResponse([
+            'success' => true,
+            'person' => $this->personPayload($person),
+        ]);
+    }
+
     public function show(int $id)
     {
         $this->permissionCheck('declarations_persons_list');
@@ -211,6 +284,24 @@ class PersonsController extends AdminBaseController
         $templates = $this->declarationPacketService->getAvailableTemplates((int) date('Y'));
         $taxTemplates = $this->declarationPacketService->getCandidateSelectableTaxTemplates((int) date('Y'));
         $packets = $this->declarationPacketService->findPacketsByPersonId($id);
+        $sentPacketRelationIds = [];
+        $sentPacketCompanyYearKeys = [];
+        $draftPacketsByRelationId = [];
+
+        foreach ($packets as $packet) {
+            $relationId = (int) $packet->employment_relation_id;
+            $companyYearKey = (int) $packet->company_id . ':' . (int) ($packet->tax_year ?: date('Y'));
+
+            if ((string) $packet->status === 'draft') {
+                $draftPacketsByRelationId[$relationId] ??= $packet;
+                continue;
+            }
+
+            if ((string) $packet->status !== 'cancelled') {
+                $sentPacketRelationIds[$relationId] = true;
+                $sentPacketCompanyYearKeys[$companyYearKey] = true;
+            }
+        }
 
         return view('App\Modules\Declarations\Views\admin\persons\show', [
             'person' => $person,
@@ -222,6 +313,9 @@ class PersonsController extends AdminBaseController
             'templates' => $templates,
             'taxTemplates' => $taxTemplates,
             'packets' => $packets,
+            'sentPacketRelationIds' => $sentPacketRelationIds,
+            'sentPacketCompanyYearKeys' => $sentPacketCompanyYearKeys,
+            'draftPacketsByRelationId' => $draftPacketsByRelationId,
         ]);
     }
 
@@ -272,6 +366,29 @@ class PersonsController extends AdminBaseController
         }
     }
 
+    public function reopenRelation(int $personId, int $relationId)
+    {
+        if (!hasPermissions('declarations_admin_override')) {
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sError', 'Nincs jogosultságod jogviszony visszanyitására.');
+        }
+
+        postAllowed();
+
+        try {
+            $this->employmentRelationService->reopenRelation($personId, $relationId);
+
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sSuccess', 'Jogviszony visszanyitva.');
+        } catch (Throwable $e) {
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sError', $e->getMessage());
+        }
+    }
+
     public function createPacket(int $personId, int $relationId)
     {
         $this->permissionCheck('declarations_packets_create');
@@ -315,5 +432,39 @@ class PersonsController extends AdminBaseController
             str_contains($rawLower, 'antra_id') => 'Ez az Antra azonosító már létezik.',
             default => $raw !== '' ? $raw : 'Hiba történt mentés közben.',
         };
+    }
+
+    private function personPayload($person): array
+    {
+        if (!$person) {
+            return [];
+        }
+
+        return [
+            'id' => (int) $person->id,
+            'antra_id' => $person->antra_id ?? '',
+            'lastname' => $person->lastname ?? '',
+            'firstname' => $person->firstname ?? '',
+            'birth_name' => $person->birth_name ?? '',
+            'mother_name' => $person->mother_name ?? '',
+            'birth_place' => $person->birth_place ?? '',
+            'birth_date' => $person->birth_date ?? '',
+            'tax_number' => $person->tax_number ?? '',
+            'taj_number' => $person->taj_number ?? '',
+            'email' => $person->email ?? '',
+            'phone' => $person->phone ?? '',
+            'status' => $person->status ?? 'active',
+        ];
+    }
+
+    private function jsonResponse(array $payload, int $status = 200)
+    {
+        if (function_exists('csrf_hash')) {
+            $payload['csrfHash'] = csrf_hash();
+        }
+
+        return $this->response
+            ->setStatusCode($status)
+            ->setJSON($payload);
     }
 }

@@ -12,6 +12,7 @@ use App\Modules\Declarations\Services\Public\InvitationContext;
 use App\Modules\Declarations\Services\Public\InvitationContextService;
 use App\Modules\Declarations\Services\Public\PublicUrlService;
 use App\Modules\Declarations\Models\DeclarationTemplateModel;
+use App\Modules\Declarations\Presenters\Submissions\SubmissionPresenterRegistry;
 use Throwable;
 
 class InvitationController extends BaseController
@@ -22,6 +23,7 @@ class InvitationController extends BaseController
     protected PublicUrlService $urlService;
     protected DeclarationPacketService $packetService;
     protected DeclarationTemplateModel $templateModel;
+    protected SubmissionPresenterRegistry $submissionPresenterRegistry;
 
     public function __construct()
     {
@@ -32,6 +34,7 @@ class InvitationController extends BaseController
         $this->urlService = new PublicUrlService();
         $this->packetService = new DeclarationPacketService();
         $this->templateModel = new DeclarationTemplateModel();
+        $this->submissionPresenterRegistry = new SubmissionPresenterRegistry();
     }
 
     public function landing()
@@ -53,7 +56,7 @@ class InvitationController extends BaseController
             $this->contextService->markOpened($context);
 
             $items = $this->submissionService->getItemsForContext($context);
-            $openPersonalDataItem = $this->findOpenPersonalDataItem($items);
+            $openPersonalDataItem = $this->findOpenPersonalDataItem($items, $context->packet);
 
             if ($openPersonalDataItem) {
                 return redirect()
@@ -81,8 +84,11 @@ class InvitationController extends BaseController
                 'items' => $items,
                 'itemUrls' => $itemUrls,
                 'startUrl' => $this->urlService->start($context->token),
+                'finalizeUrl' => $this->urlService->finalize($context->token),
                 'optionalTaxTemplates' => $optionalTaxTemplates,
                 'optionalTaxTemplateSupport' => $optionalTaxTemplateSupport,
+                'canFinalize' => $this->submissionService->canFinalize($context),
+                'summaryRowsByItemId' => $this->summaryRowsByItemId($context, $items),
             ]);
         } catch (Throwable $e) {
             return $this->invalid($e->getMessage());
@@ -141,6 +147,29 @@ class InvitationController extends BaseController
         }
     }
 
+    public function finalize(string $token)
+    {
+        try {
+            $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+            }
+
+            $this->submissionService->finalize($context);
+
+            return redirect()
+                ->to($this->urlService->start($context->token))
+                ->with('sSuccess', 'A nyilatkozatcsomag végleges beküldése sikeres.');
+        } catch (Throwable $e) {
+            return redirect()
+                ->to($this->urlService->start($token))
+                ->with('sError', $e->getMessage());
+        }
+    }
+
     public function item(string $token, int $itemId)
     {
         try {
@@ -154,7 +183,8 @@ class InvitationController extends BaseController
 
             $item = $this->submissionService->getItemForContext($context, $itemId);
             $openPersonalDataItem = $this->findOpenPersonalDataItem(
-                $this->submissionService->getItemsForContext($context)
+                $this->submissionService->getItemsForContext($context),
+                $context->packet
             );
 
             if ($openPersonalDataItem && (int) $openPersonalDataItem->id !== (int) $item->id) {
@@ -166,11 +196,15 @@ class InvitationController extends BaseController
             $submission = $this->submissionService->findSubmissionForItem($itemId);
             $handler = $this->formRegistry->forItem($item);
 
-            if ($this->submissionService->isClosed($item)) {
+            if ($this->submissionService->isClosed($item, $context->packet)) {
                 return view('App\Modules\Declarations\Views\public\forms\completed', [
                     'title' => 'Nyilatkozat beküldve',
                     'item' => $item,
                     'submission' => $submission,
+                    'displayRows' => $this->submissionPresenterRegistry->rowsFor(
+                        (string) ($item->template_code ?? ''),
+                        $submission
+                    ),
                     'startUrl' => $this->urlService->start($context->token),
                 ]);
             }
@@ -194,7 +228,8 @@ class InvitationController extends BaseController
 
             $item = $this->submissionService->getItemForContext($context, $itemId);
             $openPersonalDataItem = $this->findOpenPersonalDataItem(
-                $this->submissionService->getItemsForContext($context)
+                $this->submissionService->getItemsForContext($context),
+                $context->packet
             );
 
             if ($openPersonalDataItem && (int) $openPersonalDataItem->id !== (int) $item->id) {
@@ -209,7 +244,7 @@ class InvitationController extends BaseController
 
             return redirect()
                 ->to($this->urlService->start($context->token))
-                ->with('sSuccess', 'A nyilatkozat beküldése sikeres.');
+                ->with('sSuccess', 'A nyilatkozat mentése sikeres. A végleges beküldést az összesítőn tudod elindítani.');
         } catch (FormValidationException $e) {
             return redirect()
                 ->to($this->urlService->item($token, $itemId))
@@ -263,14 +298,35 @@ class InvitationController extends BaseController
         return 'declaration_invitation_antra_verified_' . (int) $context->invitation->id;
     }
 
-    protected function findOpenPersonalDataItem(array $items): ?object
+    protected function summaryRowsByItemId(InvitationContext $context, array $items): array
+    {
+        $submissionsByItemId = $this->submissionService->submissionsByItemId((int) $context->packet->id);
+        $rowsByItemId = [];
+
+        foreach ($items as $item) {
+            $submission = $submissionsByItemId[(int) $item->id] ?? null;
+
+            if (!$submission) {
+                continue;
+            }
+
+            $rowsByItemId[(int) $item->id] = $this->submissionPresenterRegistry->rowsFor(
+                (string) ($item->template_code ?? ''),
+                $submission
+            );
+        }
+
+        return $rowsByItemId;
+    }
+
+    protected function findOpenPersonalDataItem(array $items, object $packet): ?object
     {
         foreach ($items as $item) {
             if ((string) ($item->template_code ?? '') !== 'personal_data_statement') {
                 continue;
             }
 
-            if (!$this->submissionService->isClosed($item)) {
+            if (!in_array((string) $item->status, ['completed', 'accepted'], true)) {
                 return $item;
             }
         }

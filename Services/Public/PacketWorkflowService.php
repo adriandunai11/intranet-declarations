@@ -123,12 +123,24 @@ class PacketWorkflowService
         if (!$this->itemModel->resetReviewForResubmission($itemId)) {
             throw new \RuntimeException('A nyilatkozat státuszának frissítése sikertelen.');
         }
+    }
 
+    public function submitPacketIfReady(InvitationContext $context): void
+    {
         if (!$this->allRequiredItemsSubmittedOrAccepted((int) $context->packet->id)) {
-            return;
+            throw new \RuntimeException('A végleges beküldéshez minden kötelező dokumentumot ki kell tölteni.');
         }
 
         $oldPacketStatus = (string) $context->packet->status;
+
+        if (in_array($oldPacketStatus, [
+            DeclarationPacket::STATUS_SUBMITTED,
+            DeclarationPacket::STATUS_APPROVED,
+            DeclarationPacket::STATUS_CLOSED,
+            DeclarationPacket::STATUS_COMPLETED,
+        ], true)) {
+            return;
+        }
 
         if ($oldPacketStatus !== DeclarationPacket::STATUS_SUBMITTED) {
             $this->packetModel->markAsSubmitted((int) $context->packet->id);

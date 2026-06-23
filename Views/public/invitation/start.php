@@ -2,6 +2,9 @@
 
 <?= $this->section('content') ?>
 
+<?php $packetStatus = (string) ($packet->status ?? ''); ?>
+<?php $canModifyCompletedItems = in_array($packetStatus, ['draft', 'sent', 'in_progress'], true); ?>
+
 <div class="hero-card">
     <div class="hero-content">
         <div class="grid">
@@ -67,9 +70,9 @@
                             $actionLabel = 'Kitöltés indítása';
                         } elseif ($item->status === 'completed') {
                             $badgeClass = 'badge-review';
-                            $statusLabel = 'Beküldve, ellenőrzés alatt';
+                            $statusLabel = $canModifyCompletedItems ? 'Mentve, véglegesítésre vár' : 'Beküldve, ellenőrzés alatt';
                             $icon = '✓';
-                            $actionLabel = 'Részletek';
+                            $actionLabel = $canModifyCompletedItems ? 'Módosítás' : 'Részletek';
                         } elseif ($item->status === 'accepted') {
                             $badgeClass = 'badge-completed';
                             $statusLabel = 'Elfogadva';
@@ -121,6 +124,41 @@
                 </ul>
             <?php endif; ?>
         </div>
+
+        <?php if (!empty($canFinalize)): ?>
+            <div class="section-block">
+                <h2 class="section-title">Összesítő</h2>
+
+                <div class="notice notice-info">
+                    Nézd át a beküldött adatokat. Ha valamit javítani kell, nyisd meg a dokumentumot módosításra.
+                </div>
+
+                <?php foreach ($items as $item): ?>
+                    <?php $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? []; ?>
+                    <?php if (empty($summaryRows)): ?>
+                        <?php continue; ?>
+                    <?php endif; ?>
+
+                    <div class="info-card">
+                        <div class="info-title"><?= esc($item->template_name ?: ('Dokumentum #' . $item->template_id)) ?></div>
+
+                        <dl class="summary-list">
+                            <?php foreach ($summaryRows as $label => $value): ?>
+                                <dt><?= esc($label) ?></dt>
+                                <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                            <?php endforeach; ?>
+                        </dl>
+
+                        <a href="<?= esc($itemUrls[(int) $item->id] ?? '#') ?>" class="small-link">Módosítás</a>
+                    </div>
+                <?php endforeach; ?>
+
+                <form method="post" action="<?= esc($finalizeUrl) ?>" class="actions">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="btn btn-primary">Végleges beküldés</button>
+                </form>
+            </div>
+        <?php endif; ?>
 
         <div id="optional-tax" class="section-block">
             <h2 class="section-title">Választható adóügyi nyilatkozatok</h2>

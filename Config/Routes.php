@@ -12,11 +12,14 @@ $routes->group('declarations', [
     $routes->post('persons/create', 'PersonsController::create');
     $routes->match(['get', 'post'], 'persons/datatable', 'PersonsController::datatable');
     $routes->get('persons/(:num)', 'PersonsController::show/$1');
+    $routes->get('persons/(:num)/json', 'PersonsController::json/$1');
     $routes->post('persons/(:num)/relations/create', 'PersonsController::createRelation/$1');
     $routes->post('persons/(:num)/relations/(:num)/close', 'PersonsController::closeRelation/$1/$2');
+    $routes->post('persons/(:num)/relations/(:num)/reopen', 'PersonsController::reopenRelation/$1/$2');
     $routes->post('persons/(:num)/relations/(:num)/packets/create', 'PersonsController::createPacket/$1/$2');
     $routes->get('packets/(:num)', 'PacketsController::show/$1');
     $routes->post('packets/(:num)/invitation/create', 'PacketsController::createInvitation/$1');
+    $routes->post('packets/(:num)/items/add', 'PacketsController::addItem/$1');
     $routes->post('persons/(:num)/update', 'PersonsController::update/$1');
     $routes->post('packets/(:num)/items/(:num)/accept', 'PacketsController::acceptItem/$1/$2');
     $routes->post('packets/(:num)/items/(:num)/reject', 'PacketsController::rejectItem/$1/$2');
@@ -34,6 +37,7 @@ $routes->group('', [
     $routes->post('start/(:segment)/verify-antra', 'InvitationController::verifyAntra/$1');
     $routes->get('start/(:segment)/item/(:num)', 'InvitationController::item/$1/$2');
     $routes->post('start/(:segment)/tax-template/(:num)/select', 'InvitationController::selectTaxTemplate/$1/$2');
+    $routes->post('start/(:segment)/finalize', 'InvitationController::finalize/$1');
     $routes->post('start/(:segment)/item/(:num)', 'InvitationController::submitItem/$1/$2');
 });
 
