@@ -18,6 +18,10 @@ class DeclarationPacketItemModel extends Model
     protected $allowedFields = [
         'packet_id',
         'template_id',
+        'template_code_snapshot',
+        'template_name_snapshot',
+        'template_version_snapshot',
+        'template_file_snapshot',
         'status',
         'sort_order',
         'completed_at',
@@ -47,15 +51,18 @@ class DeclarationPacketItemModel extends Model
     {
         return $this->select([
             'declaration_packet_items.*',
-            'declaration_templates.code AS template_code',
-            'declaration_templates.name AS template_name',
+            'COALESCE(declaration_packet_items.template_code_snapshot, declaration_templates.code) AS template_code',
+            'COALESCE(declaration_packet_items.template_name_snapshot, declaration_templates.name) AS template_name',
+            'COALESCE(declaration_packet_items.template_version_snapshot, declaration_templates.version) AS template_version',
+            'COALESCE(declaration_packet_items.template_file_snapshot, declaration_templates.template_file) AS template_file',
+            'declaration_templates.code AS current_template_code',
+            'declaration_templates.name AS current_template_name',
             'declaration_templates.category AS template_category',
             'declaration_templates.declaration_group AS template_declaration_group',
             'declaration_templates.review_role AS template_review_role',
             'declaration_templates.needs_signature AS template_needs_signature',
             'declaration_templates.is_candidate_selectable AS template_is_candidate_selectable',
             'declaration_templates.tax_year AS template_tax_year',
-            'declaration_templates.version AS template_version',
             'declaration_templates.required_policy AS template_required_policy',
         ])
             ->join('declaration_templates', 'declaration_templates.id = declaration_packet_items.template_id', 'left')
