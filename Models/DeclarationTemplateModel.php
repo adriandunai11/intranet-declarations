@@ -22,6 +22,10 @@ class DeclarationTemplateModel extends Model
         'declaration_group',
         'tax_year',
         'version',
+        'template_file',
+        'effective_from',
+        'effective_to',
+        'parent_template_id',
         'renewal_policy',
         'required_policy',
         'review_role',
@@ -41,6 +45,10 @@ class DeclarationTemplateModel extends Model
         'declaration_group' => 'required|max_length[50]',
         'tax_year' => 'permit_empty|integer',
         'version' => 'required|max_length[30]',
+        'template_file' => 'permit_empty|max_length[255]',
+        'effective_from' => 'permit_empty|valid_date[Y-m-d]',
+        'effective_to' => 'permit_empty|valid_date[Y-m-d]',
+        'parent_template_id' => 'permit_empty|is_natural_no_zero',
         'renewal_policy' => 'required|max_length[50]',
         'required_policy' => 'required|max_length[50]',
         'review_role' => 'required|max_length[50]',
@@ -55,6 +63,14 @@ class DeclarationTemplateModel extends Model
     public function findActive(): array
     {
         return $this->where('is_active', 1)
+            ->groupStart()
+                ->where('effective_from', null)
+                ->orWhere('effective_from <=', date('Y-m-d'))
+            ->groupEnd()
+            ->groupStart()
+                ->where('effective_to', null)
+                ->orWhere('effective_to >=', date('Y-m-d'))
+            ->groupEnd()
             ->orderBy('category', 'ASC')
             ->orderBy('sort_order', 'ASC')
             ->orderBy('name', 'ASC')
@@ -63,7 +79,15 @@ class DeclarationTemplateModel extends Model
 
     public function findActiveForYear(?int $taxYear = null): array
     {
-        $builder = $this->where('is_active', 1);
+        $builder = $this->where('is_active', 1)
+            ->groupStart()
+                ->where('effective_from', null)
+                ->orWhere('effective_from <=', date('Y-m-d'))
+            ->groupEnd()
+            ->groupStart()
+                ->where('effective_to', null)
+                ->orWhere('effective_to >=', date('Y-m-d'))
+            ->groupEnd();
 
         if ($taxYear !== null) {
             $builder->groupStart()
@@ -86,7 +110,15 @@ class DeclarationTemplateModel extends Model
                 DeclarationTemplate::GROUP_EMPLOYMENT,
                 DeclarationTemplate::GROUP_PERSONAL_DATA,
             ])
-            ->where('required_policy', DeclarationTemplate::REQUIRED_ALWAYS);
+            ->where('required_policy', DeclarationTemplate::REQUIRED_ALWAYS)
+            ->groupStart()
+                ->where('effective_from', null)
+                ->orWhere('effective_from <=', date('Y-m-d'))
+            ->groupEnd()
+            ->groupStart()
+                ->where('effective_to', null)
+                ->orWhere('effective_to >=', date('Y-m-d'))
+            ->groupEnd();
 
         if ($taxYear !== null) {
             $builder->groupStart()
@@ -105,7 +137,15 @@ class DeclarationTemplateModel extends Model
     {
         $builder = $this->where('is_active', 1)
             ->where('declaration_group', DeclarationTemplate::GROUP_TAX)
-            ->where('is_candidate_selectable', 1);
+            ->where('is_candidate_selectable', 1)
+            ->groupStart()
+                ->where('effective_from', null)
+                ->orWhere('effective_from <=', date('Y-m-d'))
+            ->groupEnd()
+            ->groupStart()
+                ->where('effective_to', null)
+                ->orWhere('effective_to >=', date('Y-m-d'))
+            ->groupEnd();
 
         if ($taxYear !== null) {
             $builder->groupStart()
