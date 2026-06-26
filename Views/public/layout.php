@@ -4,12 +4,19 @@
     <meta charset="utf-8">
     <title><?= esc($title ?? 'Miell nyilatkozatok') ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#216e45">
+    <meta name="theme-color" content="#50b848">
     <link rel="stylesheet" href="<?= base_url('assets/declarations/css/public.css') ?>">
+    <link rel="stylesheet" href="<?= base_url('assets/declarations/css/public_redesign.css') ?>">
     <?php $localPublicCss = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public.css'; ?>
     <?php if (is_file($localPublicCss)): ?>
         <style>
             <?= file_get_contents($localPublicCss) ?>
+        </style>
+    <?php endif; ?>
+    <?php $localRedesignCss = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public_redesign.css'; ?>
+    <?php if (is_file($localRedesignCss)): ?>
+        <style>
+            <?= file_get_contents($localRedesignCss) ?>
         </style>
     <?php endif; ?>
 </head>
