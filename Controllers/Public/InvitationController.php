@@ -87,6 +87,7 @@ class InvitationController extends BaseController
                 'items' => $items,
                 'itemUrls' => $itemUrls,
                 'startUrl' => $this->urlService->start($context->token),
+                'reviewUrl' => $this->urlService->review($context->token),
                 'finalizeUrl' => $this->urlService->finalize($context->token),
                 'optionalTaxTemplates' => $optionalTaxTemplates,
                 'optionalTaxTemplateSupport' => $optionalTaxTemplateSupport,
@@ -153,6 +154,46 @@ class InvitationController extends BaseController
         }
     }
 
+    public function review(string $token)
+    {
+        try {
+            $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
+            }
+
+            if (!$this->submissionService->canFinalize($context)) {
+                return redirect()
+                    ->to($this->urlService->start($context->token))
+                    ->with('sError', 'Az ellenőrzéshez először minden kötelező dokumentumot ki kell tölteni.');
+            }
+
+            $items = $this->submissionService->getItemsForContext($context);
+            $itemUrls = [];
+
+            foreach ($items as $item) {
+                $itemUrls[(int) $item->id] = $this->urlService->item($context->token, (int) $item->id);
+            }
+
+            return view('App\Modules\Declarations\Views\public\invitation\review', [
+                'title' => 'Ellenőrzés és beküldés',
+                'invitation' => $context->invitation,
+                'packet' => $context->packet,
+                'person' => $context->person,
+                'items' => $items,
+                'itemUrls' => $itemUrls,
+                'startUrl' => $this->urlService->start($context->token),
+                'finalizeUrl' => $this->urlService->finalize($context->token),
+                'summaryRowsByItemId' => $this->summaryRowsByItemId($context, $items),
+            ]);
+        } catch (Throwable $e) {
+            return $this->invalid($e->getMessage());
+        }
+    }
+
     public function finalize(string $token)
     {
         try {
@@ -162,6 +203,12 @@ class InvitationController extends BaseController
                 return redirect()
                     ->to($this->urlService->start($token))
                     ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
+            }
+
+            if ((string) $this->request->getPost('review_confirm') !== '1') {
+                return redirect()
+                    ->to($this->urlService->review($context->token))
+                    ->with('sError', 'A végleges beküldés előtt jelölje be, hogy ellenőrizte a megadott adatokat.');
             }
 
             $this->submissionService->finalize($context);
@@ -204,7 +251,7 @@ class InvitationController extends BaseController
 
             if ($this->submissionService->isClosed($item, $context->packet)) {
                 return view('App\Modules\Declarations\Views\public\forms\completed', [
-                    'title' => 'Nyilatkozat beküldve',
+                    'title' => 'Nyilatkozat adatai',
                     'item' => $item,
                     'submission' => $submission,
                     'displayRows' => $this->submissionPresenterRegistry->rowsFor(
@@ -250,7 +297,7 @@ class InvitationController extends BaseController
 
             return redirect()
                 ->to($this->urlService->start($context->token))
-                ->with('sSuccess', 'A nyilatkozat mentése sikeres. A végleges beküldést az összesítőn tudja elindítani.');
+                ->with('sSuccess', 'A nyilatkozat mentése sikeres. A végleges beküldés előtt az ellenőrző oldalon át tudja nézni az adatokat.');
         } catch (FormValidationException $e) {
             return redirect()
                 ->to($this->urlService->item($token, $itemId))
