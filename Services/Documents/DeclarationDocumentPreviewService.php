@@ -56,11 +56,7 @@ class DeclarationDocumentPreviewService
             throw new RuntimeException('Ehhez a nyilatkozathoz nincs külön PDF sablon. Az adatok az összesítőben ellenőrizhetők.');
         }
 
-        $config = config(\App\Modules\Declarations\Config\Declarations::class);
-        $templatePath = rtrim((string) $config->documentTemplatePath, DIRECTORY_SEPARATOR)
-            . DIRECTORY_SEPARATOR
-            . $templateCode
-            . '.docx';
+        $templatePath = $this->resolveTemplatePath($item, $templateCode);
 
         if (!is_file($templatePath)) {
             throw new RuntimeException('A dokumentum sablon még nincs feltöltve ehhez a nyilatkozathoz.');
@@ -110,6 +106,19 @@ class DeclarationDocumentPreviewService
         }
 
         throw new RuntimeException('A nyilatkozat nem található ebben a csomagban.');
+    }
+
+    private function resolveTemplatePath(object $item, string $templateCode): string
+    {
+        $config = config(\App\Modules\Declarations\Config\Declarations::class);
+        $basePath = rtrim((string) $config->documentTemplatePath, DIRECTORY_SEPARATOR);
+        $templateFile = trim((string) ($item->template_file ?? ''));
+
+        if ($templateFile !== '') {
+            return $basePath . DIRECTORY_SEPARATOR . ltrim($templateFile, DIRECTORY_SEPARATOR);
+        }
+
+        return $basePath . DIRECTORY_SEPARATOR . $templateCode . '.docx';
     }
 
     private function previewPath(int $packetId, int $itemId, string $templateCode): string
