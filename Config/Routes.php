@@ -37,6 +37,7 @@ $routes->group('', [
     $routes->get('/', 'InvitationController::landing');
     $routes->get('start/(:segment)', 'InvitationController::start/$1');
     $routes->post('start/(:segment)/verify-antra', 'InvitationController::verifyAntra/$1');
+    $routes->get('start/(:segment)/review', 'InvitationController::review/$1');
     $routes->get('start/(:segment)/item/(:num)', 'InvitationController::item/$1/$2');
     $routes->get('start/(:segment)/item/(:num)/preview', 'DocumentPreviewController::item/$1/$2');
     $routes->post('start/(:segment)/tax-template/(:num)/select', 'InvitationController::selectTaxTemplate/$1/$2');
