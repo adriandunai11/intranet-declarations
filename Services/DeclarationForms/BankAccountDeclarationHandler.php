@@ -2,10 +2,17 @@
 
 namespace App\Modules\Declarations\Services\DeclarationForms;
 
+use App\Modules\Declarations\Services\Validation\HungarianIdentifierValidator;
 use RuntimeException;
 
 class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
 {
+    protected HungarianIdentifierValidator $identifierValidator;
+
+    public function __construct()
+    {
+        $this->identifierValidator = new HungarianIdentifierValidator();
+    }
     public function supports(string $templateCode): bool
     {
         return $templateCode === 'bank_account_statement';
@@ -26,7 +33,7 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
         return [
             'account_holder' => 'required|min_length[3]|max_length[190]',
             'bank_name' => 'required|min_length[2]|max_length[190]',
-            'bank_account_number' => 'required|min_length[17]|max_length[35]',
+            'bank_account_number' => 'required|min_length[16]|max_length[35]',
             'confirm_truth' => 'required',
         ];
     }
@@ -49,7 +56,7 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
             throw new RuntimeException('A bankszámlaszámnak 16 vagy 24 számjegyből kell állnia.');
         }
 
-        if (!$this->isValidHungarianBankAccountNumber((string) ($data['bank_account_number'] ?? ''))) {
+        if (!$this->identifierValidator->isValidHungarianBankAccountNumber((string) ($data['bank_account_number'] ?? ''))) {
             throw new RuntimeException('A bankszámlaszám ellenőrző száma hibás.');
         }
 
@@ -58,26 +65,4 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
         }
     }
 
-    private function isValidHungarianBankAccountNumber(string $value): bool
-    {
-        if (!preg_match('/^\d{16}(\d{8})?$/', $value)) {
-            return false;
-        }
-
-        $weights = [9, 7, 3, 1, 9, 7, 3, 1];
-
-        foreach (str_split($value, 8) as $block) {
-            $sum = 0;
-
-            for ($i = 0; $i < 8; $i++) {
-                $sum += ((int) $block[$i]) * $weights[$i];
-            }
-
-            if ($sum % 10 !== 0) {
-                return false;
-            }
-        }
-
-        return true;
-    }
 }

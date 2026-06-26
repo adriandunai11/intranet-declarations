@@ -17,6 +17,8 @@ class DeclarationAuditLogModel extends Model
     public const ACTION_INVITATION_REVOKED = 'invitation_revoked';
     public const ACTION_INVITATION_OPENED = 'invitation_opened';
     public const ACTION_INVITATION_COMPLETED = 'invitation_completed';
+    public const ACTION_ANTRA_VERIFICATION_SUCCEEDED = 'antra_verification_succeeded';
+    public const ACTION_ANTRA_VERIFICATION_FAILED = 'antra_verification_failed';
     public const ACTION_ITEM_SUBMITTED = 'item_submitted';
     public const ACTION_ITEM_RESUBMITTED = 'item_resubmitted';
     public const ACTION_ITEM_ACCEPTED = 'item_accepted';
@@ -27,6 +29,8 @@ class DeclarationAuditLogModel extends Model
     public const ACTION_RELATION_STATUS_CHANGED = 'relation_status_changed';
     public const ACTION_INVITATION_EMAIL_SENT = 'invitation_email_sent';
     public const ACTION_REJECTION_EMAIL_SENT = 'rejection_email_sent';
+    public const ACTION_PACKET_REVIEW_EMAIL_SENT = 'packet_review_email_sent';
+    public const ACTION_DOCUMENT_GENERATED = 'document_generated';
 
     protected $table = 'declaration_audit_logs';
     protected $primaryKey = 'id';
@@ -114,6 +118,20 @@ class DeclarationAuditLogModel extends Model
     public function findByPacketId(int $packetId, int $limit = 50): array
     {
         return $this->where('packet_id', $packetId)
+            ->orderBy('id', 'DESC')
+            ->limit($limit)
+            ->findAll();
+    }
+
+    public function findByPersonId(int $personId, int $limit = 50): array
+    {
+        return $this->groupStart()
+                ->where('person_id', $personId)
+                ->orGroupStart()
+                    ->whereIn('entity_type', ['person', 'declaration_person'])
+                    ->where('entity_id', $personId)
+                ->groupEnd()
+            ->groupEnd()
             ->orderBy('id', 'DESC')
             ->limit($limit)
             ->findAll();

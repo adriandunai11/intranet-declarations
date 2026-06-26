@@ -270,98 +270,6 @@ class DeclarationPacketService
         ];
     }
 
-    public function createInvitationLink(int $packetId): array
-    {
-        $packet = $this->findPacket($packetId);
-
-        $person = $this->personModel->find($packet->person_id);
-        $relation = $this->relationModel->find($packet->employment_relation_id);
-
-        if (!$person) {
-            throw new RuntimeException('A személy nem található.');
-        }
-
-        if (!$relation) {
-            throw new RuntimeException('A beléptetési folyamat nem található.');
-        }
-
-        $this->assertNoBlockingPacketForRelation(
-            $relation,
-            $this->normalizeTaxYear(!empty($packet->tax_year) ? (int) $packet->tax_year : null),
-            (int) $packet->id
-        );
-
-        $this->assertPacketContainsPersonalDataItem((int) $packet->id);
-
-        $candidateEmail = trim((string) ($person->email ?? ''));
-
-        if ($candidateEmail === '') {
-            throw new RuntimeException('A személyhez nincs e-mail cím rögzítve.');
-        }
-
-        $existingInvitation = $this->invitationModel->findActiveByPacketId($packet->id);
-
-        if ($existingInvitation) {
-            throw new RuntimeException('Ehhez a nyilatkozatcsomaghoz már van aktív meghívó link.');
-        }
-
-        $plainToken = $this->tokenService->generatePlainToken();
-        $tokenHash = $this->tokenService->hashToken($plainToken);
-
-        $expiresAt = (new DateTime('+14 days'))->format('Y-m-d H:i:s');
-
-        $invitationId = $this->invitationModel->insert([
-            'person_id' => $packet->person_id,
-            'employment_relation_id' => $packet->employment_relation_id,
-            'packet_id' => $packet->id,
-            'email' => $candidateEmail,
-            'token_hash' => $tokenHash,
-            'status' => \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_CREATED,
-            'expires_at' => $expiresAt,
-        ], true);
-
-        if (!$invitationId) {
-            $errors = $this->invitationModel->errors();
-
-            throw new RuntimeException(
-                !empty($errors) ? implode(' ', $errors) : 'A meghívó link létrehozása sikertelen.'
-            );
-        }
-
-        $this->packetModel->markAsSent($packet->id);
-
-        $this->relationModel->updateStatus(
-            $packet->employment_relation_id,
-            EmploymentRelation::STATUS_INVITED
-        );
-
-        $this->auditLogModel->logAction(
-            DeclarationAuditLogModel::ACTION_INVITATION_CREATED,
-            'declaration_invitation',
-            (int) $invitationId,
-            (int) $packet->id,
-            null,
-            null,
-            'created',
-            'Első meghívó link létrehozva.',
-            [
-                'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
-                'email' => $candidateEmail,
-                'expires_at' => $expiresAt,
-            ]
-        );
-
-        $config = config(\App\Modules\Declarations\Config\Declarations::class);
-
-        return [
-            'invitation_id' => (int) $invitationId,
-            'plain_token' => $plainToken,
-            'url' => rtrim($config->publicBaseUrl, '/') . '/start/' . $plainToken,
-            'expires_at' => $expiresAt,
-        ];
-    }
-
     public function createNewInvitationLink(int $packetId): array
     {
         $packet = $this->findPacket($packetId);
@@ -469,14 +377,16 @@ class DeclarationPacketService
             }
 
             $this->auditLogModel->logAction(
-                DeclarationAuditLogModel::ACTION_INVITATION_REGENERATED,
+                $activeInvitationsBeforeRevoke > 0
+                    ? DeclarationAuditLogModel::ACTION_INVITATION_REGENERATED
+                    : DeclarationAuditLogModel::ACTION_INVITATION_CREATED,
                 'declaration_invitation',
                 (int) $invitationId,
                 (int) $packet->id,
                 null,
                 null,
                 \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_SENT,
-                'Új meghívó link létrehozva.',
+                $activeInvitationsBeforeRevoke > 0 ? 'Új meghívó link létrehozva.' : 'Meghívó link létrehozva.',
                 [
                     'person_id' => (int) $packet->person_id,
                     'employment_relation_id' => (int) $packet->employment_relation_id,
@@ -585,6 +495,14 @@ class DeclarationPacketService
         $details['editableTemplates'] = $details['canEditPacketItems']
             ? $this->getEditableTemplatesForPacket((int) $packet->id)
             : [];
+        $details['batchRejectItems'] = array_values(array_filter($reviewItems, static function (array $reviewItem): bool {
+            $item = $reviewItem['item'] ?? null;
+
+            return (bool) ($reviewItem['can_review'] ?? false)
+                && !empty($reviewItem['submission'])
+                && $item
+                && (string) $item->status === DeclarationPacketItem::STATUS_COMPLETED;
+        }));
 
         return $details;
     }
@@ -690,6 +608,7 @@ class DeclarationPacketService
 
         if (in_array((string) $packet->status, [
             DeclarationPacket::STATUS_APPROVED,
+            DeclarationPacket::STATUS_SUBMITTED,
             DeclarationPacket::STATUS_CLOSED,
             DeclarationPacket::STATUS_COMPLETED,
             DeclarationPacket::STATUS_CANCELLED,
@@ -717,6 +636,7 @@ class DeclarationPacketService
 
         if (in_array((string) $packet->status, [
             DeclarationPacket::STATUS_APPROVED,
+            DeclarationPacket::STATUS_SUBMITTED,
             DeclarationPacket::STATUS_CLOSED,
             DeclarationPacket::STATUS_COMPLETED,
             DeclarationPacket::STATUS_CANCELLED,
@@ -755,26 +675,6 @@ class DeclarationPacketService
             $errors = $this->itemModel->errors();
 
             throw new RuntimeException(!empty($errors) ? implode(' ', $errors) : 'A kiválasztott nyilatkozat hozzáadása sikertelen.');
-        }
-
-        if ((string) $packet->status === DeclarationPacket::STATUS_SUBMITTED) {
-            $this->packetModel->markAsInProgress((int) $packet->id);
-
-            $this->auditLogModel->logAction(
-                DeclarationAuditLogModel::ACTION_PACKET_STATUS_CHANGED,
-                'declaration_packet',
-                (int) $packet->id,
-                (int) $packet->id,
-                null,
-                DeclarationPacket::STATUS_SUBMITTED,
-                DeclarationPacket::STATUS_IN_PROGRESS,
-                'Választható nyilatkozat hozzáadása miatt a csomag újra kitöltés alatt áll.',
-                [
-                    'actor_type' => 'candidate',
-                    'person_id' => (int) $packet->person_id,
-                    'employment_relation_id' => (int) $packet->employment_relation_id,
-                ]
-            );
         }
 
         $this->auditLogModel->logAction(

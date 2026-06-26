@@ -12,6 +12,7 @@ use App\Modules\Declarations\Services\Public\InvitationContext;
 use App\Modules\Declarations\Services\Public\InvitationContextService;
 use App\Modules\Declarations\Services\Public\PublicUrlService;
 use App\Modules\Declarations\Models\DeclarationTemplateModel;
+use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Presenters\Submissions\SubmissionPresenterRegistry;
 use Throwable;
 
@@ -24,6 +25,7 @@ class InvitationController extends BaseController
     protected DeclarationPacketService $packetService;
     protected DeclarationTemplateModel $templateModel;
     protected SubmissionPresenterRegistry $submissionPresenterRegistry;
+    protected DeclarationAuditLogModel $auditLogModel;
 
     public function __construct()
     {
@@ -35,6 +37,7 @@ class InvitationController extends BaseController
         $this->packetService = new DeclarationPacketService();
         $this->templateModel = new DeclarationTemplateModel();
         $this->submissionPresenterRegistry = new SubmissionPresenterRegistry();
+        $this->auditLogModel = new DeclarationAuditLogModel();
     }
 
     public function landing()
@@ -103,6 +106,8 @@ class InvitationController extends BaseController
             $expectedAntraId = trim((string) ($context->person->antra_id ?? ''));
 
             if ($submittedAntraId === '' || $expectedAntraId === '' || !hash_equals($expectedAntraId, $submittedAntraId)) {
+                $this->logAntraVerification($context, false, strlen($submittedAntraId), $expectedAntraId !== '');
+
                 return redirect()
                     ->to($this->urlService->start($token))
                     ->withInput()
@@ -110,6 +115,7 @@ class InvitationController extends BaseController
             }
 
             session()->set($this->antraSessionKey($context), true);
+            $this->logAntraVerification($context, true, strlen($submittedAntraId), true);
 
             return redirect()
                 ->to($this->urlService->start($context->token));
@@ -126,7 +132,7 @@ class InvitationController extends BaseController
             if (!$this->isAntraVerified($context)) {
                 return redirect()
                     ->to($this->urlService->start($token))
-                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+                    ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
             }
 
             $template = $this->templateModel->find($templateId);
@@ -155,7 +161,7 @@ class InvitationController extends BaseController
             if (!$this->isAntraVerified($context)) {
                 return redirect()
                     ->to($this->urlService->start($token))
-                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+                    ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
             }
 
             $this->submissionService->finalize($context);
@@ -178,7 +184,7 @@ class InvitationController extends BaseController
             if (!$this->isAntraVerified($context)) {
                 return redirect()
                     ->to($this->urlService->start($token))
-                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+                    ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
             }
 
             $item = $this->submissionService->getItemForContext($context, $itemId);
@@ -190,7 +196,7 @@ class InvitationController extends BaseController
             if ($openPersonalDataItem && (int) $openPersonalDataItem->id !== (int) $item->id) {
                 return redirect()
                     ->to($this->urlService->item($context->token, (int) $openPersonalDataItem->id))
-                    ->with('sError', 'Először az Antra azonosítót és a személyes adatokat kell megadni.');
+                    ->with('sError', 'Először az Antra azonosítót és a személyes adatokat kell megadnia.');
             }
 
             $submission = $this->submissionService->findSubmissionForItem($itemId);
@@ -223,7 +229,7 @@ class InvitationController extends BaseController
             if (!$this->isAntraVerified($context)) {
                 return redirect()
                     ->to($this->urlService->start($token))
-                    ->with('sError', 'A folytatáshoz először add meg az Antra azonosítót.');
+                    ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
             }
 
             $item = $this->submissionService->getItemForContext($context, $itemId);
@@ -235,7 +241,7 @@ class InvitationController extends BaseController
             if ($openPersonalDataItem && (int) $openPersonalDataItem->id !== (int) $item->id) {
                 return redirect()
                     ->to($this->urlService->item($context->token, (int) $openPersonalDataItem->id))
-                    ->with('sError', 'Először az Antra azonosítót és a személyes adatokat kell megadni.');
+                    ->with('sError', 'Először az Antra azonosítót és a személyes adatokat kell megadnia.');
             }
 
             $handler = $this->formRegistry->forItem($item);
@@ -244,7 +250,7 @@ class InvitationController extends BaseController
 
             return redirect()
                 ->to($this->urlService->start($context->token))
-                ->with('sSuccess', 'A nyilatkozat mentése sikeres. A végleges beküldést az összesítőn tudod elindítani.');
+                ->with('sSuccess', 'A nyilatkozat mentése sikeres. A végleges beküldést az összesítőn tudja elindítani.');
         } catch (FormValidationException $e) {
             return redirect()
                 ->to($this->urlService->item($token, $itemId))
@@ -296,6 +302,39 @@ class InvitationController extends BaseController
     protected function antraSessionKey(InvitationContext $context): string
     {
         return 'declaration_invitation_antra_verified_' . (int) $context->invitation->id;
+    }
+
+    protected function logAntraVerification(
+        InvitationContext $context,
+        bool $success,
+        int $submittedLength,
+        bool $expectedPresent
+    ): void {
+        try {
+            $this->auditLogModel->logAction(
+                $success
+                    ? DeclarationAuditLogModel::ACTION_ANTRA_VERIFICATION_SUCCEEDED
+                    : DeclarationAuditLogModel::ACTION_ANTRA_VERIFICATION_FAILED,
+                'declaration_invitation',
+                (int) $context->invitation->id,
+                (int) $context->packet->id,
+                null,
+                null,
+                null,
+                $success ? 'Antra azonosítás sikeres.' : 'Sikertelen Antra azonosítási kísérlet.',
+                [
+                    'actor_type' => 'candidate',
+                    'actor_label' => 'Kitöltő',
+                    'person_id' => (int) $context->person->id,
+                    'employment_relation_id' => (int) $context->packet->employment_relation_id,
+                    'invitation_id' => (int) $context->invitation->id,
+                    'submitted_length' => $submittedLength,
+                    'expected_present' => $expectedPresent,
+                ]
+            );
+        } catch (Throwable $e) {
+            log_message('error', 'Antra verification audit log failed: ' . $e->getMessage());
+        }
     }
 
     protected function summaryRowsByItemId(InvitationContext $context, array $items): array

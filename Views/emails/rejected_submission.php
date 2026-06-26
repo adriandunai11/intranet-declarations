@@ -31,24 +31,26 @@
                             </p>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
-                                Az alábbi dokumentum ellenőrzés után javításra visszaküldésre került:
+                                Az alábbi dokumentum<?= !empty($rejectedItems) && count($rejectedItems) > 1 ? 'ok' : '' ?>
+                                ellenőrzés után javításra visszaküldésre került<?= !empty($rejectedItems) && count($rejectedItems) > 1 ? 'ek' : '' ?>:
                             </p>
 
-                            <div
-                                style="background:#f8faf7; border:1px solid #dfe5dc; border-radius:12px; padding:14px 16px; margin:18px 0;">
-                                <div style="font-size:15px; font-weight:700; color:#162018;">
-                                    <?= esc($declarationName) ?>
+                            <?php $itemsToRender = !empty($rejectedItems) ? $rejectedItems : [['name' => $declarationName ?? 'Nyilatkozat', 'review_note' => $reviewNote ?? '']]; ?>
+                            <?php foreach ($itemsToRender as $rejectedItem): ?>
+                                <div
+                                    style="background:#f8faf7; border:1px solid #dfe5dc; border-radius:12px; padding:14px 16px; margin:18px 0;">
+                                    <div style="font-size:15px; font-weight:700; color:#162018;">
+                                        <?= esc($rejectedItem['name'] ?? 'Nyilatkozat') ?>
+                                    </div>
+
+                                    <?php if (!empty($rejectedItem['review_note'])): ?>
+                                        <div
+                                            style="background:#fff1f2; border:1px solid #fecdd3; color:#b42318; border-radius:10px; padding:12px 14px; margin:12px 0 0; font-size:14px; line-height:1.7;">
+                                            <?= nl2br(esc($rejectedItem['review_note'])) ?>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
-                            </div>
-
-                            <p style="margin:22px 0 8px; font-size:15px; line-height:1.7; font-weight:700;">
-                                Ellenőrzési megjegyzés:
-                            </p>
-
-                            <div
-                                style="background:#fff1f2; border:1px solid #fecdd3; color:#b42318; border-radius:12px; padding:14px 16px; margin:0 0 20px; font-size:14px; line-height:1.7;">
-                                <?= nl2br(esc($reviewNote)) ?>
-                            </div>
+                            <?php endforeach; ?>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
                                 Kérjük, nyissa meg újra a korábban kapott dokumentumkitöltő linket, javítsa az adatokat,

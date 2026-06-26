@@ -19,7 +19,6 @@ class EmploymentRelationModel extends Model
         'company_id',
         'intranet_user_id',
         'primary_recruiter_user_id',
-        'onboarding_type',
         'status',
         'location',
         'location_id',
@@ -34,8 +33,6 @@ class EmploymentRelationModel extends Model
         'company_id' => 'required|is_natural_no_zero',
         'location_id' => 'permit_empty|is_natural_no_zero',
         'primary_recruiter_user_id' => 'required|is_natural_no_zero',
-        'onboarding_type' => 'required|max_length[50]',
-
         'status' => 'required|max_length[30]',
         'location' => 'permit_empty|max_length[190]',
         'start_date' => 'required|valid_date[Y-m-d]',

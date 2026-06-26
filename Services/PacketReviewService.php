@@ -107,44 +107,70 @@ class PacketReviewService
 
     public function rejectItem(int $packetId, int $itemId, string $reviewNote): void
     {
-        $reviewNote = trim($reviewNote);
+        $this->rejectItems($packetId, [$itemId], [$itemId => $reviewNote]);
+    }
 
-        if ($reviewNote === '') {
-            throw new RuntimeException('Elutasításkor kötelező megadni a javítás okát.');
-        }
+    public function rejectItems(int $packetId, array $itemIds, array $reviewNotes): void
+    {
+        $itemIds = array_values(array_unique(array_filter(array_map('intval', $itemIds))));
 
-        $item = $this->findItemForPacket($packetId, $itemId);
-        $submission = $this->submissionModel->findByPacketItemId($itemId);
-
-        if (!$submission) {
-            throw new RuntimeException('Ehhez a nyilatkozathoz nincs beküldött adat.');
+        if ($itemIds === []) {
+            throw new RuntimeException('Válassz legalább egy elutasítandó nyilatkozatot.');
         }
 
         $packet = $this->packetModel->find($packetId);
-        $relation = $packet ? $this->relationModel->find((int) $packet->employment_relation_id) : null;
 
         if (!$packet) {
             throw new RuntimeException('A nyilatkozatcsomag nem található.');
         }
 
-        $this->reviewAuthorizationService->assertCanReviewItem($packet, $relation, $item);
-
-        if ($item->status !== DeclarationPacketItem::STATUS_COMPLETED) {
-            throw new RuntimeException('Csak beküldött, ellenőrzésre váró nyilatkozat utasítható el.');
-        }
-
-        $oldItemStatus = (string) $item->status;
-        $oldSubmissionStatus = (string) $submission->status;
+        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $oldPacketStatus = (string) $packet->status;
         $oldRelationStatus = $relation ? (string) $relation->status : null;
         $reviewedBy = function_exists('logged') ? (int) logged('id') : null;
+        $prepared = [];
+
+        foreach ($itemIds as $itemId) {
+            $reviewNote = trim((string) ($reviewNotes[$itemId] ?? ''));
+
+            if ($reviewNote === '') {
+                throw new RuntimeException('Minden kijelölt nyilatkozathoz meg kell adni a javítás okát.');
+            }
+
+            $item = $this->findItemForPacket($packetId, $itemId);
+            $submission = $this->submissionModel->findByPacketItemId($itemId);
+
+            if (!$submission) {
+                throw new RuntimeException('Ehhez a nyilatkozathoz nincs beküldött adat: #' . $itemId);
+            }
+
+            $this->reviewAuthorizationService->assertCanReviewItem($packet, $relation, $item);
+
+            if ($item->status !== DeclarationPacketItem::STATUS_COMPLETED) {
+                throw new RuntimeException('Csak beküldött, ellenőrzésre váró nyilatkozat utasítható el: ' . ($item->template_name ?: ('#' . $itemId)));
+            }
+
+            $prepared[] = [
+                'item' => $item,
+                'submission' => $submission,
+                'review_note' => $reviewNote,
+                'old_item_status' => (string) $item->status,
+                'old_submission_status' => (string) $submission->status,
+            ];
+        }
 
         $db = db_connect();
         $db->transBegin();
 
         try {
-            $this->itemModel->markAsRejected($itemId, $reviewNote, $reviewedBy);
-            $this->submissionModel->markAsRejected((int) $submission->id);
+            foreach ($prepared as $preparedItem) {
+                $item = $preparedItem['item'];
+                $submission = $preparedItem['submission'];
+                $reviewNote = $preparedItem['review_note'];
+
+                $this->itemModel->markAsRejected((int) $item->id, $reviewNote, $reviewedBy);
+                $this->submissionModel->markAsRejected((int) $submission->id);
+            }
 
             $this->packetModel->markAsInProgress($packetId);
 
@@ -161,7 +187,7 @@ class PacketReviewService
                 );
             }
 
-            if ($relation) {
+            if ($relation && $relation->isOpen()) {
                 $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
 
                 if ($oldRelationStatus !== EmploymentRelation::STATUS_IN_PROGRESS) {
@@ -178,25 +204,30 @@ class PacketReviewService
                 }
             }
 
-            $this->auditLogModel->logAction(
-                DeclarationAuditLogModel::ACTION_ITEM_REJECTED,
-                'declaration_packet_item',
-                $itemId,
-                $packetId,
-                $itemId,
-                $oldItemStatus,
-                DeclarationPacketItem::STATUS_REJECTED,
-                $reviewNote,
-                [
-                    'submission_id' => (int) $submission->id,
-                    'old_submission_status' => $oldSubmissionStatus,
-                    'new_submission_status' => DeclarationSubmission::STATUS_REJECTED,
-                    'template_id' => (int) $item->template_id,
-                    'template_code' => $item->template_code ?? null,
-                    'template_name' => $item->template_name ?? null,
-                    'reviewed_by_user_id' => $reviewedBy,
-                ]
-            );
+            foreach ($prepared as $preparedItem) {
+                $item = $preparedItem['item'];
+                $submission = $preparedItem['submission'];
+
+                $this->auditLogModel->logAction(
+                    DeclarationAuditLogModel::ACTION_ITEM_REJECTED,
+                    'declaration_packet_item',
+                    (int) $item->id,
+                    $packetId,
+                    (int) $item->id,
+                    $preparedItem['old_item_status'],
+                    DeclarationPacketItem::STATUS_REJECTED,
+                    $preparedItem['review_note'],
+                    [
+                        'submission_id' => (int) $submission->id,
+                        'old_submission_status' => $preparedItem['old_submission_status'],
+                        'new_submission_status' => DeclarationSubmission::STATUS_REJECTED,
+                        'template_id' => (int) $item->template_id,
+                        'template_code' => $item->template_code ?? null,
+                        'template_name' => $item->template_name ?? null,
+                        'reviewed_by_user_id' => $reviewedBy,
+                    ]
+                );
+            }
 
             if ($db->transStatus() === false) {
                 throw new RuntimeException('A nyilatkozat elutasítása sikertelen.');
@@ -209,7 +240,7 @@ class PacketReviewService
         }
 
         try {
-            $this->notificationService->notifyRejectedSubmission($item, $submission, $reviewNote);
+            $this->notificationService->notifyRejectedPacketItems($packetId);
         } catch (\Throwable $e) {
             log_message('error', 'Rejected submission notification failed: ' . $e->getMessage());
         }
@@ -278,7 +309,7 @@ class PacketReviewService
                 );
             }
 
-            if ($relation) {
+            if ($relation && $relation->isOpen()) {
                 $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
 
                 if ($oldRelationStatus !== EmploymentRelation::STATUS_IN_PROGRESS) {
@@ -368,6 +399,30 @@ class PacketReviewService
                 'employment_relation_id' => (int) $packet->employment_relation_id,
             ]
         );
+
+        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
+
+        if ($relation && $relation->isOpen()) {
+            $oldRelationStatus = (string) $relation->status;
+            $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_COMPLETED);
+
+            if ($oldRelationStatus !== EmploymentRelation::STATUS_COMPLETED) {
+                $this->auditLogModel->logAction(
+                    DeclarationAuditLogModel::ACTION_RELATION_STATUS_CHANGED,
+                    'declaration_employment_relation',
+                    (int) $relation->id,
+                    $packetId,
+                    null,
+                    $oldRelationStatus,
+                    EmploymentRelation::STATUS_COMPLETED,
+                    'Minden kötelező nyilatkozat elfogadásra került.',
+                    [
+                        'person_id' => (int) $packet->person_id,
+                        'employment_relation_id' => (int) $relation->id,
+                    ]
+                );
+            }
+        }
 
     }
 

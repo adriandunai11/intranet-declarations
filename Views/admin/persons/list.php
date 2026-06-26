@@ -86,6 +86,7 @@
                         <label for="antra_id" class="required">Antra azonosító</label>
                         <input type="text" name="antra_id" id="antra_id" required class="form-control"
                             value="<?= old('antra_id') ?>">
+                        <div class="small mt-1 js-antra-feedback" id="antra_id_feedback"></div>
                     </div>
                     <div class="col-md-12 form-group">
                         <label for="email" class="required">E-mail</label>
@@ -136,6 +137,7 @@
                         <div class="col-md-4 form-group">
                             <label for="edit_antra_id">Antra azonosító</label>
                             <input type="text" name="antra_id" id="edit_antra_id" class="form-control">
+                            <div class="small mt-1 js-antra-feedback" id="edit_antra_id_feedback"></div>
                         </div>
 
                         <div class="col-md-4 form-group">
@@ -234,6 +236,9 @@
     $(document).ready(function () {
         var csrfName = '<?= csrf_token() ?>';
         var csrfHash = '<?= csrf_hash() ?>';
+        var createAntraExists = false;
+        var editAntraExists = false;
+        var currentEditPersonId = null;
 
         function updateCsrf(response) {
             if (response && response.csrfHash) {
@@ -271,6 +276,68 @@
             }
 
             return [fallback || 'Hiba történt a művelet közben.'];
+        }
+
+        function setAntraFeedback(input, type, message) {
+            var feedback = input.closest('.form-group').find('.js-antra-feedback');
+
+            input.removeClass('is-invalid is-valid');
+            feedback.removeClass('text-danger text-warning text-success text-muted').text('');
+
+            if (!message) {
+                return;
+            }
+
+            if (type === 'danger' || type === 'warning') {
+                input.addClass('is-invalid');
+                feedback.addClass(type === 'warning' ? 'text-warning' : 'text-danger').text(message);
+                return;
+            }
+
+            input.addClass('is-valid');
+            feedback.addClass(type === 'success' ? 'text-success' : 'text-muted').text(message);
+        }
+
+        function checkAntra(input, excludePersonId, callback) {
+            var value = $.trim(input.val() || '');
+
+            if (value.length === 0) {
+                setAntraFeedback(input, 'danger', 'Az Antra azonosító megadása kötelező.');
+                callback(false);
+                return;
+            }
+
+            if (value.length < 2) {
+                setAntraFeedback(input, 'danger', 'Az Antra azonosító legalább 2 karakter legyen.');
+                callback(false);
+                return;
+            }
+
+            setAntraFeedback(input, 'muted', 'Ellenőrzés...');
+
+            $.get('<?= url('declarations/persons/antra/check') ?>', {
+                antra_id: value,
+                exclude_person_id: excludePersonId || ''
+            }).done(function (response) {
+                if (response.exists) {
+                    setAntraFeedback(input, 'warning', response.message || 'Ez az Antra azonosító már létezik.');
+                    callback(true);
+                    return;
+                }
+
+                setAntraFeedback(input, 'success', response.message || 'Az Antra azonosító szabad.');
+                callback(false);
+            }).fail(function () {
+                setAntraFeedback(input, 'danger', 'Az Antra azonosító ellenőrzése nem sikerült.');
+                callback(false);
+            });
+        }
+
+        function debounceAntra(input, excludePersonId, setter) {
+            clearTimeout(input.data('antraTimer'));
+            input.data('antraTimer', setTimeout(function () {
+                checkAntra(input, excludePersonId, setter);
+            }, 350));
         }
 
         var table = $('#dataTable1').DataTable({
@@ -313,6 +380,8 @@
             var button = $(this);
             var personId = button.data('id');
             var form = $('#editPersonForm');
+            currentEditPersonId = personId;
+            editAntraExists = false;
 
             form.find('.js-form-alert').empty();
             form.attr('action', '<?= url('declarations/persons') ?>/' + personId + '/update');
@@ -333,6 +402,7 @@
                     $('#edit_email').val(person.email || '');
                     $('#edit_phone').val(person.phone || '');
                     $('#edit_status').val(person.status || 'active');
+                    setAntraFeedback($('#edit_antra_id'), '', '');
 
                     $('#editPersonModal').modal('show');
                 })
@@ -344,15 +414,19 @@
         $('#editPersonForm').validate();
         $('#createPersonForm').validate();
 
-        $('#createPersonForm').on('submit', function (event) {
-            event.preventDefault();
+        $('#antra_id').on('input blur', function () {
+            debounceAntra($(this), null, function (exists) {
+                createAntraExists = exists;
+            });
+        });
 
-            var form = $(this);
+        $('#edit_antra_id').on('input blur', function () {
+            debounceAntra($(this), currentEditPersonId, function (exists) {
+                editAntraExists = exists;
+            });
+        });
 
-            if (!form.valid()) {
-                return;
-            }
-
+        function submitCreatePersonForm(form) {
             form.find('input[name="' + csrfName + '"]').val(csrfHash);
             form.find('.js-form-alert').empty();
             form.find('button[type="submit"]').prop('disabled', true);
@@ -367,6 +441,8 @@
 
                 if (response.success) {
                     form[0].reset();
+                    setAntraFeedback($('#antra_id'), '', '');
+                    createAntraExists = false;
                     $('#createModal').modal('hide');
                     table.ajax.reload(null, false);
                     return;
@@ -379,6 +455,31 @@
             }).always(function () {
                 form.find('button[type="submit"]').prop('disabled', false);
             });
+        }
+
+        $('#createPersonForm').on('submit', function (event) {
+            event.preventDefault();
+
+            var form = $(this);
+
+            if (!form.valid()) {
+                return;
+            }
+
+            form.find('.js-form-alert').empty();
+            form.find('button[type="submit"]').prop('disabled', true);
+
+            checkAntra($('#antra_id'), null, function (exists) {
+                createAntraExists = exists;
+
+                if (exists) {
+                    showFormAlert(form, 'warning', ['Ez az Antra azonosító már létezik, ezért nem hozható létre új személy ezzel az azonosítóval.']);
+                    form.find('button[type="submit"]').prop('disabled', false);
+                    return;
+                }
+
+                submitCreatePersonForm(form);
+            });
         });
 
         $('#editPersonForm').on('submit', function (event) {
@@ -387,6 +488,11 @@
             var form = $(this);
 
             if (!form.valid()) {
+                return;
+            }
+
+            if (editAntraExists) {
+                showFormAlert(form, 'warning', ['Ez az Antra azonosító már másik személyhez tartozik.']);
                 return;
             }
 

@@ -12,6 +12,7 @@ use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Services\DeclarationForms\DeclarationFormHandlerInterface;
 use App\Modules\Declarations\Services\Exceptions\DeclarationAlreadySubmittedException;
 use App\Modules\Declarations\Services\Exceptions\FormValidationException;
+use App\Modules\Declarations\Services\DeclarationNotificationService;
 use App\Modules\Declarations\Services\PersonDataUpdateService;
 use CodeIgniter\HTTP\IncomingRequest;
 
@@ -22,6 +23,7 @@ class DeclarationSubmissionService
     protected PacketWorkflowService $workflowService;
     protected PersonDataUpdateService $personDataUpdateService;
     protected DeclarationAuditLogModel $auditLogModel;
+    protected DeclarationNotificationService $notificationService;
 
     public function __construct()
     {
@@ -30,6 +32,7 @@ class DeclarationSubmissionService
         $this->workflowService = new PacketWorkflowService();
         $this->personDataUpdateService = new PersonDataUpdateService();
         $this->auditLogModel = new DeclarationAuditLogModel();
+        $this->notificationService = new DeclarationNotificationService();
     }
 
     public function getItemForContext(InvitationContext $context, int $itemId): object
@@ -119,7 +122,16 @@ class DeclarationSubmissionService
             throw new \RuntimeException('A végleges beküldéshez minden kötelező dokumentumot ki kell tölteni.');
         }
 
-        $this->workflowService->submitPacketIfReady($context);
+        $submittedNow = $this->workflowService->submitPacketIfReady($context);
+
+        if ($submittedNow) {
+            try {
+                $this->notificationService->notifyPacketSubmittedForReview((int) $context->packet->id);
+            } catch (\Throwable $e) {
+                log_message('error', 'Packet review notification failed: ' . $e->getMessage());
+                log_message('error', $e->getTraceAsString());
+            }
+        }
     }
 
     public function submit(
@@ -142,7 +154,7 @@ class DeclarationSubmissionService
         $validation->setRules($handler->rules());
 
         if (!$validation->run($input)) {
-            throw new FormValidationException($validation->getErrors());
+            throw new FormValidationException($this->localizedValidationErrors($validation->getErrors()));
         }
 
         $data = $handler->normalize($input);
@@ -257,5 +269,30 @@ class DeclarationSubmissionService
             $db->transRollback();
             throw $e;
         }
+    }
+
+    private function localizedValidationErrors(array $errors): array
+    {
+        $messages = [
+            'birth_name' => 'A születési név megadása kötelező, legalább 3 karakterrel.',
+            'mother_name' => 'Az anyja neve megadása kötelező, legalább 3 karakterrel.',
+            'birth_place' => 'A születési hely megadása kötelező.',
+            'birth_date' => 'A születési dátum megadása kötelező, év-hónap-nap formátumban.',
+            'tax_number' => 'Az adóazonosító jelet pontosan, számjegyekkel add meg.',
+            'taj_number' => 'A TAJ számot pontosan, számjegyekkel add meg.',
+            'phone' => 'A telefonszám megadása kötelező.',
+            'account_holder' => 'A számlatulajdonos nevének megadása kötelező.',
+            'bank_name' => 'A bank nevének megadása kötelező.',
+            'bank_account_number' => 'A bankszámlaszámot 16 vagy 24 számjeggyel add meg.',
+            'confirm_truth' => 'A beküldéshez el kell fogadni a valóságtartalomról szóló nyilatkozatot.',
+        ];
+
+        foreach ($errors as $field => $message) {
+            if (isset($messages[$field])) {
+                $errors[$field] = $messages[$field];
+            }
+        }
+
+        return $errors;
     }
 }

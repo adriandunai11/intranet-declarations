@@ -93,7 +93,6 @@ class EmploymentRelationService
             'location' => $locationName,
             'intranet_user_id' => null,
             'primary_recruiter_user_id' => $primaryRecruiterUserId,
-            'onboarding_type' => $this->nullableString($data['onboarding_type'] ?? null) ?? EmploymentRelation::ONBOARDING_TYPE_CANDIDATE,
             'status' => EmploymentRelation::STATUS_ONBOARDING,
             'start_date' => $this->nullableString($data['start_date'] ?? null),
             'previous_relation_id' => isset($data['previous_relation_id']) && $data['previous_relation_id'] !== ''
@@ -122,7 +121,6 @@ class EmploymentRelationService
                 'company_id' => $companyId,
                 'location_id' => $locationId,
                 'primary_recruiter_user_id' => $primaryRecruiterUserId,
-                'onboarding_type' => $payload['onboarding_type'] ?? null,
                 'start_date' => $payload['start_date'] ?? null,
             ],
         ]);

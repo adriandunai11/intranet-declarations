@@ -125,7 +125,7 @@ class PacketWorkflowService
         }
     }
 
-    public function submitPacketIfReady(InvitationContext $context): void
+    public function submitPacketIfReady(InvitationContext $context): bool
     {
         if (!$this->allRequiredItemsSubmittedOrAccepted((int) $context->packet->id)) {
             throw new \RuntimeException('A végleges beküldéshez minden kötelező dokumentumot ki kell tölteni.');
@@ -139,7 +139,7 @@ class PacketWorkflowService
             DeclarationPacket::STATUS_CLOSED,
             DeclarationPacket::STATUS_COMPLETED,
         ], true)) {
-            return;
+            return false;
         }
 
         if ($oldPacketStatus !== DeclarationPacket::STATUS_SUBMITTED) {
@@ -163,6 +163,37 @@ class PacketWorkflowService
                 ]
             );
         }
+
+        if (!empty($context->packet->employment_relation_id)) {
+            $relation = $this->relationModel->find((int) $context->packet->employment_relation_id);
+
+            if ($relation && $relation->isOpen()) {
+                $oldRelationStatus = (string) $relation->status;
+                $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED);
+
+                if ($oldRelationStatus !== EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED) {
+                    $this->auditLogModel->logAction(
+                        DeclarationAuditLogModel::ACTION_RELATION_STATUS_CHANGED,
+                        'declaration_employment_relation',
+                        (int) $relation->id,
+                        (int) $context->packet->id,
+                        null,
+                        $oldRelationStatus,
+                        EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
+                        'A beálló véglegesen beküldte a nyilatkozatcsomagot, ellenőrzésre vár.',
+                        [
+                            'actor_type' => 'candidate',
+                            'actor_label' => $context->invitation->email ?? null,
+                            'person_id' => (int) $context->packet->person_id,
+                            'employment_relation_id' => (int) $relation->id,
+                            'invitation_id' => (int) $context->invitation->id,
+                        ]
+                    );
+                }
+            }
+        }
+
+        return true;
     }
 
     private function allRequiredItemsSubmittedOrAccepted(int $packetId): bool

@@ -129,6 +129,7 @@
                                                     'onboarding' => ['Beléptetés alatt', 'primary'],
                                                     'invited' => ['Nyilatkozat kiküldve', 'info'],
                                                     'in_progress' => ['Kitöltés folyamatban', 'warning'],
+                                                    'declarations_submitted' => ['Nyilatkozatok ellenőrzésre várnak', 'primary'],
                                                     'completed' => ['Nyilatkozatok elfogadva', 'success'],
                                                     'active' => ['Aktív dolgozó', 'success'],
                                                     'transferred' => ['Áthelyezve', 'warning'],
@@ -247,6 +248,22 @@
                             </table>
                         </div>
                     <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Személy előzmények
+                    </h3>
+                </div>
+
+                <div class="card-body p-0">
+                    <?= view('App\Modules\Declarations\Views\admin\partials\audit_table', [
+                        'auditLogs' => $auditLogs ?? [],
+                        'tableId' => 'personAuditLogTable',
+                        'emptyText' => 'Még nincs naplózott esemény ehhez a személyhez.',
+                    ]) ?>
                 </div>
             </div>
         </div>
@@ -438,17 +455,9 @@
                         </div>
                     </div>
 
-                    <h6 class="text-muted mb-3">Beléptetési adatok</h6>
+                    <h6 class="text-muted mb-3">Jogviszony adatok</h6>
                     <div class="row">
-                        <div class="col-md-4 form-group">
-                            <label for="onboarding_type" class="required">Beléptetés típusa</label>
-                            <select name="onboarding_type" id="onboarding_type" class="form-control" required>
-                                <option value="candidate" <?= old('onboarding_type', 'candidate') === 'candidate' ? 'selected' : '' ?>>Új beálló / jelölt</option>
-                                <option value="returning_parent" <?= old('onboarding_type') === 'returning_parent' ? 'selected' : '' ?>>Visszatérő kismama</option>
-                                <option value="transfer" <?= old('onboarding_type') === 'transfer' ? 'selected' : '' ?>>Átlépő</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4 form-group">
+                        <div class="col-md-6 form-group">
                             <label for="company_id" class="required">Cég</label>
                             <select name="company_id" id="company_id" class="form-control" required>
                                 <option value="">Válassz céget...</option>
@@ -460,7 +469,7 @@
                             </select>
                         </div>
 
-                        <div class="col-md-4 form-group">
+                        <div class="col-md-6 form-group">
                             <label for="start_date" class="required">Kezdés dátuma</label>
                             <input type="date" name="start_date" id="start_date" class="form-control" required
                                 value="<?= old('start_date') ?>">
@@ -509,6 +518,18 @@
                 width: '100%',
                 placeholder: 'Válassz telephelyet...',
                 allowClear: true
+            });
+        }
+
+        if ($.fn.DataTable && $('#personAuditLogTable').length) {
+            $('#personAuditLogTable').DataTable({
+                order: [[0, 'desc']],
+                pageLength: 25,
+                autoWidth: false,
+                responsive: true,
+                language: {
+                    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/hu.json'
+                }
             });
         }
     });

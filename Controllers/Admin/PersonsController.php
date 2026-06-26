@@ -4,6 +4,7 @@ namespace App\Modules\Declarations\Controllers\Admin;
 
 use App\Controllers\AdminBaseController;
 use App\Modules\Declarations\Models\PersonModel;
+use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Presenters\PersonTablePresenter;
 use App\Modules\Declarations\Services\DeclarationPacketService;
 use App\Modules\Declarations\Services\EmploymentRelationService;
@@ -23,6 +24,7 @@ class PersonsController extends AdminBaseController
     protected DeclarationPacketService $declarationPacketService;
     protected PersonTablePresenter $personTablePresenter;
     protected RecruiterService $recruiterService;
+    protected DeclarationAuditLogModel $auditLogModel;
 
     public function __construct()
     {
@@ -31,6 +33,7 @@ class PersonsController extends AdminBaseController
         $this->declarationPacketService = new DeclarationPacketService();
         $this->personTablePresenter = new PersonTablePresenter();
         $this->recruiterService = new RecruiterService();
+        $this->auditLogModel = new DeclarationAuditLogModel();
     }
 
     public function index()
@@ -113,9 +116,11 @@ class PersonsController extends AdminBaseController
                 ]);
             }
 
-            return redirect()->to(url('declarations/persons/' . $personId))
-                ->with('sSuccess', 'Személy létrehozva. A következő lépésben jogviszonyt és nyilatkozatcsomagot lehet indítani.');
+            return redirect()->to(url('declarations/persons'))
+                ->with('sSuccess', 'Személy létrehozva. A listában megnyitható a személy adatlapja, ha jogviszonyt vagy nyilatkozatcsomagot indítanál.');
         } catch (Throwable $e) {
+            $this->logFailure('person_create', $e);
+
             if ($this->request->isAJAX()) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -172,6 +177,8 @@ class PersonsController extends AdminBaseController
                 ->to(url('declarations/persons'))
                 ->with('sSuccess', 'A személy adatai frissítve.');
         } catch (Throwable $e) {
+            $this->logFailure('person_update', $e);
+
             if ($this->request->isAJAX()) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -245,6 +252,38 @@ class PersonsController extends AdminBaseController
             ->toJson(true);
     }
 
+    public function checkAntra()
+    {
+        if (!hasPermissions('declarations_persons_add') && !hasPermissions('declarations_persons_edit')) {
+            return $this->jsonResponse([
+                'success' => false,
+                'errors' => ['Nincs jogosultságod az Antra azonosító ellenőrzésére.'],
+            ], 403);
+        }
+
+        $antraId = trim((string) $this->request->getGet('antra_id'));
+        $excludePersonId = (int) $this->request->getGet('exclude_person_id');
+
+        if ($antraId === '') {
+            return $this->jsonResponse([
+                'success' => true,
+                'exists' => false,
+            ]);
+        }
+
+        $existingPerson = (new PersonModel())->findByAntraId($antraId);
+        $exists = $existingPerson && (int) $existingPerson->id !== $excludePersonId;
+
+        return $this->jsonResponse([
+            'success' => true,
+            'exists' => (bool) $exists,
+            'message' => $exists
+                ? 'Ehhez az Antra azonosítóhoz már létezik személy: ' . $existingPerson->fullName() . '.'
+                : 'Az Antra azonosító szabad.',
+            'person_id' => $exists ? (int) $existingPerson->id : null,
+        ]);
+    }
+
     public function json(int $id)
     {
         $this->permissionCheck('declarations_persons_list');
@@ -316,6 +355,7 @@ class PersonsController extends AdminBaseController
             'sentPacketRelationIds' => $sentPacketRelationIds,
             'sentPacketCompanyYearKeys' => $sentPacketCompanyYearKeys,
             'draftPacketsByRelationId' => $draftPacketsByRelationId,
+            'auditLogs' => $this->auditLogModel->findByPersonId($id, 50),
         ]);
     }
 
@@ -331,6 +371,8 @@ class PersonsController extends AdminBaseController
                 ->to(url('declarations/persons/' . $personId))
                 ->with('sSuccess', 'Jogviszony sikeresen létrehozva.');
         } catch (Throwable $e) {
+            $this->logFailure('relation_create', $e);
+
             return redirect()
                 ->to(url('declarations/persons/' . $personId))
                 ->withInput()
@@ -359,6 +401,8 @@ class PersonsController extends AdminBaseController
                 ->to(url('declarations/persons/' . $personId))
                 ->with('sSuccess', 'Jogviszony lezárva.');
         } catch (Throwable $e) {
+            $this->logFailure('relation_close', $e);
+
             return redirect()
                 ->to(url('declarations/persons/' . $personId))
                 ->withInput()
@@ -383,6 +427,8 @@ class PersonsController extends AdminBaseController
                 ->to(url('declarations/persons/' . $personId))
                 ->with('sSuccess', 'Jogviszony visszanyitva.');
         } catch (Throwable $e) {
+            $this->logFailure('relation_reopen', $e);
+
             return redirect()
                 ->to(url('declarations/persons/' . $personId))
                 ->with('sError', $e->getMessage());
@@ -414,6 +460,8 @@ class PersonsController extends AdminBaseController
                 ->to(url('declarations/packets/' . $packetId))
                 ->with('sSuccess', 'Nyilatkozatcsomag létrehozva.');
         } catch (Throwable $e) {
+            $this->logFailure('packet_create_for_relation', $e);
+
             return redirect()
                 ->to(url('declarations/persons/' . $personId))
                 ->withInput()
@@ -466,5 +514,11 @@ class PersonsController extends AdminBaseController
         return $this->response
             ->setStatusCode($status)
             ->setJSON($payload);
+    }
+
+    private function logFailure(string $action, Throwable $e): void
+    {
+        log_message('error', sprintf('Declarations person admin action failed [%s]: %s', $action, $e->getMessage()));
+        log_message('error', $e->getTraceAsString());
     }
 }

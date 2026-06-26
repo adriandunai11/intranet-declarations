@@ -2,10 +2,17 @@
 
 namespace App\Modules\Declarations\Services\DeclarationForms;
 
+use App\Modules\Declarations\Services\Validation\HungarianIdentifierValidator;
 use RuntimeException;
 
 class PersonalDataDeclarationHandler implements DeclarationFormHandlerInterface
 {
+    protected HungarianIdentifierValidator $identifierValidator;
+
+    public function __construct()
+    {
+        $this->identifierValidator = new HungarianIdentifierValidator();
+    }
     public function supports(string $templateCode): bool
     {
         return $templateCode === 'personal_data_statement';
@@ -28,8 +35,8 @@ class PersonalDataDeclarationHandler implements DeclarationFormHandlerInterface
             'mother_name' => 'required|min_length[3]|max_length[190]',
             'birth_place' => 'required|min_length[2]|max_length[100]',
             'birth_date' => 'required|valid_date[Y-m-d]',
-            'tax_number' => 'required|min_length[10]|max_length[10]',
-            'taj_number' => 'required|min_length[9]|max_length[9]',
+            'tax_number' => 'required|min_length[9]|max_length[20]',
+            'taj_number' => 'required|min_length[8]|max_length[20]',
             'phone' => 'required|min_length[6]|max_length[50]',
             'confirm_truth' => 'required',
         ];
@@ -55,7 +62,7 @@ class PersonalDataDeclarationHandler implements DeclarationFormHandlerInterface
             throw new RuntimeException('Az adóazonosító jelnek pontosan 10 számjegyből kell állnia.');
         }
 
-        if (!$this->isValidTaxNumber((string) ($data['tax_number'] ?? ''))) {
+        if (!$this->identifierValidator->isValidTaxNumber((string) ($data['tax_number'] ?? ''))) {
             throw new RuntimeException('Az adóazonosító jel ellenőrző száma hibás.');
         }
 
@@ -63,43 +70,13 @@ class PersonalDataDeclarationHandler implements DeclarationFormHandlerInterface
             throw new RuntimeException('A TAJ számnak pontosan 9 számjegyből kell állnia.');
         }
 
-        if (!$this->isValidTajNumber((string) ($data['taj_number'] ?? ''))) {
+        if (!$this->identifierValidator->isValidTajNumber((string) ($data['taj_number'] ?? ''))) {
             throw new RuntimeException('A TAJ szám ellenőrző száma hibás.');
         }
 
         if ((int) ($data['confirm_truth'] ?? 0) !== 1) {
             throw new RuntimeException('A beküldéshez el kell fogadni a valóságtartalomról szóló nyilatkozatot.');
         }
-    }
-
-    private function isValidTaxNumber(string $value): bool
-    {
-        if (!preg_match('/^\d{10}$/', $value) || $value[0] !== '8') {
-            return false;
-        }
-
-        $sum = 0;
-
-        for ($i = 0; $i < 9; $i++) {
-            $sum += ((int) $value[$i]) * ($i + 1);
-        }
-
-        return $sum % 11 === (int) $value[9];
-    }
-
-    private function isValidTajNumber(string $value): bool
-    {
-        if (!preg_match('/^\d{9}$/', $value)) {
-            return false;
-        }
-
-        $sum = 0;
-
-        for ($i = 0; $i < 8; $i++) {
-            $sum += ((int) $value[$i]) * (($i % 2 === 0) ? 3 : 7);
-        }
-
-        return $sum % 10 === (int) $value[8];
     }
 
     private function cleanText($value): string
