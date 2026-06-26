@@ -46,8 +46,18 @@ class DocumentPreviewController extends BaseController
             }
 
             $path = $this->previewService->generateTemporaryPdfForPacketItem((int) $context->packet->id, (int) $item->id);
+            $content = file_get_contents($path);
 
-            return $this->response->download($path, null)->inline();
+            if ($content === false) {
+                throw new \RuntimeException('Az előnézet nem olvasható.');
+            }
+
+            @unlink($path);
+
+            return $this->response
+                ->setContentType('application/pdf')
+                ->setHeader('Content-Disposition', 'inline')
+                ->setBody($content);
         } catch (Throwable $e) {
             return view('App\Modules\Declarations\Views\public\documents\preview_unavailable', [
                 'title' => 'Dokumentum előnézet',
