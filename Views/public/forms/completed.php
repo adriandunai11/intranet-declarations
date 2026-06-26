@@ -2,27 +2,41 @@
 
 <?= $this->section('content') ?>
 
+<?php
+$itemStatus = (string) ($item->status ?? '');
+$isAccepted = $itemStatus === 'accepted';
+
+$pageEyebrow = $isAccepted ? 'Elfogadott dokumentum' : 'Mentett dokumentum';
+$pageTitle = $isAccepted ? 'Elfogadott adatok' : 'Mentett adatok ellenőrzése';
+$pageLead = $isAccepted
+    ? 'Ezek az adatok kerültek elfogadásra ehhez a dokumentumhoz.'
+    : 'Ezek az adatok jelenleg mentve vannak ehhez a dokumentumhoz. A végleges beküldés a csomag összesítő oldalán történik.';
+$statusText = $isAccepted ? 'Elfogadva' : 'Mentve';
+$statusSubText = $submission && !empty($submission->submitted_at)
+    ? (string) $submission->submitted_at
+    : 'A végleges beküldésig ellenőrizhető.';
+$helperText = $isAccepted
+    ? 'A dokumentum elfogadva. Ha mégis módosítás szükséges, azt a kapcsolattartó jelzi.'
+    : 'Ha módosítani szeretné az adatokat, lépjen vissza az összesítőhöz, és nyissa meg újra a dokumentumot.';
+?>
+
 <div class="submitted-layout">
     <aside class="submitted-side">
         <a href="<?= esc($startUrl) ?>" class="back-link">← Vissza az összesítőhöz</a>
 
-        <div class="eyebrow">Beküldött dokumentum</div>
+        <div class="eyebrow"><?= esc($pageEyebrow) ?></div>
         <h1><?= esc($item->template_name ?? 'Nyilatkozat') ?></h1>
 
         <div class="submitted-status-card">
             <span class="submitted-status-dot"></span>
             <div>
-                <strong>Rögzítve</strong>
-                <?php if ($submission && !empty($submission->submitted_at)): ?>
-                    <span><?= esc($submission->submitted_at) ?></span>
-                <?php else: ?>
-                    <span>A link érvényességéig megtekinthető</span>
-                <?php endif; ?>
+                <strong><?= esc($statusText) ?></strong>
+                <span><?= esc($statusSubText) ?></span>
             </div>
         </div>
 
         <p class="submitted-help">
-            Ha módosítás szükséges, azt a kapcsolattartó jelzi, és a dokumentum újranyitható javításra.
+            <?= esc($helperText) ?>
         </p>
     </aside>
 
@@ -30,11 +44,11 @@
         <section class="submitted-card">
             <div class="submitted-head">
                 <div>
-                    <div class="eyebrow">Ellenőrzött adatok</div>
-                    <h2>Beküldött adatok</h2>
-                    <p>Ezek az adatok kerültek mentésre ehhez a dokumentumhoz.</p>
+                    <div class="eyebrow">Adatok ellenőrzése</div>
+                    <h2><?= esc($pageTitle) ?></h2>
+                    <p><?= esc($pageLead) ?></p>
                 </div>
-                <span class="badge badge-completed">Sikeresen rögzítve</span>
+                <span class="badge <?= $isAccepted ? 'badge-completed' : 'badge-review' ?>"><?= esc($statusText) ?></span>
             </div>
 
             <?php if (!empty($displayRows)): ?>
