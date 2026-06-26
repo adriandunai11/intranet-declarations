@@ -63,8 +63,7 @@ class DeclarationDocumentGenerationService
             throw new RuntimeException('A nyilatkozat sablonkódja hiányzik.');
         }
 
-        $config = config(\App\Modules\Declarations\Config\Declarations::class);
-        $templatePath = rtrim((string) $config->documentTemplatePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . $templateCode . '.docx';
+        $templatePath = $this->resolveTemplatePath($item, $templateCode);
 
         if (!is_file($templatePath)) {
             throw new RuntimeException('A DOCX sablon nem található: ' . $templatePath);
@@ -99,6 +98,8 @@ class DeclarationDocumentGenerationService
                 'employment_relation_id' => (int) $packet->employment_relation_id,
                 'submission_id' => (int) $submission->id,
                 'template_code' => $templateCode,
+                'template_version' => $item->template_version ?? null,
+                'template_file' => $item->template_file ?? null,
                 'format' => $format,
                 'output_path' => $outputPath,
             ]
@@ -116,6 +117,19 @@ class DeclarationDocumentGenerationService
         }
 
         throw new RuntimeException('A nyilatkozat nem található ebben a csomagban.');
+    }
+
+    private function resolveTemplatePath(object $item, string $templateCode): string
+    {
+        $config = config(\App\Modules\Declarations\Config\Declarations::class);
+        $basePath = rtrim((string) $config->documentTemplatePath, DIRECTORY_SEPARATOR);
+        $templateFile = trim((string) ($item->template_file ?? ''));
+
+        if ($templateFile !== '') {
+            return $basePath . DIRECTORY_SEPARATOR . ltrim($templateFile, DIRECTORY_SEPARATOR);
+        }
+
+        return $basePath . DIRECTORY_SEPARATOR . $templateCode . '.docx';
     }
 
     private function outputPath(int $packetId, int $itemId, string $templateCode, string $format): string
