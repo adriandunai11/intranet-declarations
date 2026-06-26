@@ -15,6 +15,8 @@ class DeclarationPacketItemModel extends Model
     protected $createdField = 'created_at';
     protected $updatedField = 'updated_at';
 
+    protected $beforeInsert = ['snapshotTemplateMetadata'];
+
     protected $allowedFields = [
         'packet_id',
         'template_id',
@@ -38,6 +40,28 @@ class DeclarationPacketItemModel extends Model
         'status' => 'required|max_length[30]',
         'sort_order' => 'permit_empty|integer',
     ];
+
+    protected function snapshotTemplateMetadata(array $data): array
+    {
+        $templateId = (int) ($data['data']['template_id'] ?? 0);
+
+        if ($templateId <= 0) {
+            return $data;
+        }
+
+        $template = (new DeclarationTemplateModel())->find($templateId);
+
+        if (!$template) {
+            return $data;
+        }
+
+        $data['data']['template_code_snapshot'] = $data['data']['template_code_snapshot'] ?? (string) ($template->code ?? '');
+        $data['data']['template_name_snapshot'] = $data['data']['template_name_snapshot'] ?? (string) ($template->name ?? '');
+        $data['data']['template_version_snapshot'] = $data['data']['template_version_snapshot'] ?? (string) ($template->version ?? '');
+        $data['data']['template_file_snapshot'] = $data['data']['template_file_snapshot'] ?? (string) ($template->template_file ?? '');
+
+        return $data;
+    }
 
     public function findByPacketId(int $packetId): array
     {
