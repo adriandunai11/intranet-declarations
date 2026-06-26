@@ -12,5 +12,7 @@ class Declarations extends BaseConfig
     public string $payrollReviewEmail = 'adrian.dunai@miellgroup.com';
     public string $documentTemplatePath = WRITEPATH . 'declaration_templates';
     public string $documentOutputPath = WRITEPATH . 'declaration_documents';
+    public string $documentPreviewCachePath = WRITEPATH . 'cache/declaration_previews';
+    public int $documentPreviewTtlSeconds = 7200;
     public string $docxToPdfCommand = '';
 }
