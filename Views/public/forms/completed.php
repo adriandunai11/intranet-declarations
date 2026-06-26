@@ -2,43 +2,50 @@
 
 <?= $this->section('content') ?>
 
-<div class="form-layout">
-    <aside class="form-context-panel">
+<div class="submitted-layout">
+    <aside class="submitted-side">
+        <a href="<?= esc($startUrl) ?>" class="back-link">← Vissza az összesítőhöz</a>
+
         <div class="eyebrow">Beküldött dokumentum</div>
         <h1><?= esc($item->template_name ?? 'Nyilatkozat') ?></h1>
 
-        <?php if ($submission && !empty($submission->submitted_at)): ?>
-            <p>Beküldés ideje: <strong><?= esc($submission->submitted_at) ?></strong></p>
-        <?php else: ?>
-            <p>A dokumentum adatai a link érvényességéig megtekinthetők.</p>
-        <?php endif; ?>
-
-        <div class="helper-card">
-            <div class="helper-title">Állapot</div>
-            <p>A beküldés rögzítve van. Ha módosítás szükséges, azt a kapcsolattartó jelzi.</p>
+        <div class="submitted-status-card">
+            <span class="submitted-status-dot"></span>
+            <div>
+                <strong>Rögzítve</strong>
+                <?php if ($submission && !empty($submission->submitted_at)): ?>
+                    <span><?= esc($submission->submitted_at) ?></span>
+                <?php else: ?>
+                    <span>A link érvényességéig megtekinthető</span>
+                <?php endif; ?>
+            </div>
         </div>
 
-        <a href="<?= esc($startUrl) ?>" class="btn btn-secondary btn-block">Vissza az összesítőhöz</a>
+        <p class="submitted-help">
+            Ha módosítás szükséges, azt a kapcsolattartó jelzi, és a dokumentum újranyitható javításra.
+        </p>
     </aside>
 
-    <main class="form-main-panel">
-        <section class="content-card">
-            <div class="section-heading">
+    <main class="submitted-main">
+        <section class="submitted-card">
+            <div class="submitted-head">
                 <div>
+                    <div class="eyebrow">Ellenőrzött adatok</div>
                     <h2>Beküldött adatok</h2>
-                    <p class="section-note">Ezek az adatok kerültek mentésre ehhez a dokumentumhoz.</p>
+                    <p>Ezek az adatok kerültek mentésre ehhez a dokumentumhoz.</p>
                 </div>
+                <span class="badge badge-completed">Sikeresen rögzítve</span>
             </div>
 
-            <div class="notice notice-success">A dokumentum beküldése sikeresen rögzítve van.</div>
-
             <?php if (!empty($displayRows)): ?>
-                <div class="summary-card">
-                    <div class="summary-title"><?= esc($item->template_name ?? 'Nyilatkozat') ?></div>
-                    <dl class="summary-list">
+                <div class="data-review-card">
+                    <div class="data-review-title"><?= esc($item->template_name ?? 'Nyilatkozat') ?></div>
+                    <dl class="data-review-list">
                         <?php foreach ($displayRows as $label => $value): ?>
-                            <dt><?= esc($label) ?></dt>
-                            <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                            <div>
+                                <dt><?= esc($label) ?></dt>
+                                <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                            </div>
                         <?php endforeach; ?>
                     </dl>
                 </div>
