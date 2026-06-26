@@ -7,56 +7,50 @@ $packetStatus = (string) ($packet->status ?? '');
 $canModifyCompletedItems = in_array($packetStatus, ['draft', 'sent', 'in_progress'], true);
 $isPacketClosedForCandidate = in_array($packetStatus, ['submitted', 'approved', 'closed', 'completed'], true);
 $items = $items ?? [];
+$summaryRowsByItemId = $summaryRowsByItemId ?? [];
 
-$hasSummaryRows = false;
 $itemStats = [
     'total' => count($items),
     'done' => 0,
     'todo' => 0,
     'rejected' => 0,
+    'previewable' => 0,
 ];
 
-foreach (($summaryRowsByItemId ?? []) as $summaryRows) {
-    if (!empty($summaryRows)) {
-        $hasSummaryRows = true;
-        break;
-    }
-}
+$hasSummaryRows = false;
+$nextItem = null;
 
 foreach ($items as $statsItem) {
-    if (in_array((string) $statsItem->status, ['completed', 'accepted'], true)) {
+    $status = (string) ($statsItem->status ?? '');
+    $summaryRows = $summaryRowsByItemId[(int) $statsItem->id] ?? [];
+    $isPreviewable = !empty($summaryRows) && (string) ($statsItem->template_code ?? '') !== 'personal_data_statement';
+
+    if (!empty($summaryRows)) {
+        $hasSummaryRows = true;
+    }
+
+    if ($isPreviewable) {
+        $itemStats['previewable']++;
+    }
+
+    if (in_array($status, ['completed', 'accepted'], true)) {
         $itemStats['done']++;
         continue;
     }
 
-    if ((string) $statsItem->status === 'rejected') {
+    if ($status === 'rejected') {
         $itemStats['rejected']++;
+        $nextItem ??= $statsItem;
         continue;
     }
 
     $itemStats['todo']++;
+    $nextItem ??= $statsItem;
 }
 
 $completionPercent = $itemStats['total'] > 0
     ? (int) round(($itemStats['done'] / $itemStats['total']) * 100)
     : 0;
-
-$nextItem = null;
-foreach ($items as $candidateItem) {
-    if ((string) $candidateItem->status === 'rejected') {
-        $nextItem = $candidateItem;
-        break;
-    }
-}
-
-if (!$nextItem) {
-    foreach ($items as $candidateItem) {
-        if ((string) $candidateItem->status === 'pending') {
-            $nextItem = $candidateItem;
-            break;
-        }
-    }
-}
 
 $nextItemUrl = $nextItem ? ($itemUrls[(int) $nextItem->id] ?? '#') : null;
 $nextItemLabel = $nextItem && (string) $nextItem->status === 'rejected'
@@ -66,6 +60,10 @@ $nextItemLabel = $nextItem && (string) $nextItem->status === 'rejected'
 $statusLabel = $isPacketClosedForCandidate
     ? 'Beküldve'
     : (!empty($canFinalize) ? 'Beküldhető' : 'Kitöltés alatt');
+
+$previewUrlFor = static function (object $item) use ($startUrl): string {
+    return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/preview';
+};
 ?>
 
 <div class="portal-layout">
@@ -111,9 +109,9 @@ $statusLabel = $isPacketClosedForCandidate
             <div class="sidebar-section-title">Következő lépés</div>
             <p class="sidebar-copy">
                 <?php if (!empty($canFinalize)): ?>
-                    Minden kötelező dokumentum mentve van. Küldje be a csomagot ellenőrzésre.
+                    Minden kötelező dokumentum mentve van. Ellenőrizze az előnézeteket, majd küldje be a csomagot.
                 <?php elseif ($nextItem): ?>
-                    Nyissa meg a következő szükséges dokumentumot.
+                    Haladjon tovább a következő kitöltendő vagy javítandó nyilatkozattal.
                 <?php elseif ($isPacketClosedForCandidate): ?>
                     A csomag beküldve, az adatok a link érvényességéig megtekinthetők.
                 <?php else: ?>
@@ -122,10 +120,7 @@ $statusLabel = $isPacketClosedForCandidate
             </p>
 
             <?php if (!empty($canFinalize)): ?>
-                <form method="post" action="<?= esc($finalizeUrl) ?>">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-primary btn-block">Csomag beküldése</button>
-                </form>
+                <a href="#document-preview-check" class="btn btn-primary btn-block">Előnézetek ellenőrzése</a>
             <?php elseif ($nextItemUrl): ?>
                 <a href="<?= esc($nextItemUrl) ?>" class="btn btn-primary btn-block"><?= esc($nextItemLabel) ?></a>
             <?php else: ?>
@@ -136,22 +131,10 @@ $statusLabel = $isPacketClosedForCandidate
         <section class="sidebar-card">
             <div class="sidebar-section-title">Folyamat</div>
             <ol class="vertical-steps">
-                <li class="is-complete">
-                    <span>1</span>
-                    <strong>Azonosítás</strong>
-                </li>
-                <li class="<?= $itemStats['todo'] === 0 ? 'is-complete' : 'is-current' ?>">
-                    <span>2</span>
-                    <strong>Dokumentumok</strong>
-                </li>
-                <li class="<?= $hasSummaryRows ? (!empty($canFinalize) ? 'is-current' : 'is-complete') : '' ?>">
-                    <span>3</span>
-                    <strong>Összesítő</strong>
-                </li>
-                <li class="<?= $isPacketClosedForCandidate ? 'is-complete' : '' ?>">
-                    <span>4</span>
-                    <strong>Beküldés</strong>
-                </li>
+                <li class="is-complete"><span>1</span><strong>Azonosítás</strong></li>
+                <li class="<?= $itemStats['todo'] === 0 ? 'is-complete' : 'is-current' ?>"><span>2</span><strong>Kitöltés</strong></li>
+                <li class="<?= $hasSummaryRows ? (!empty($canFinalize) ? 'is-current' : 'is-complete') : '' ?>"><span>3</span><strong>Ellenőrzés</strong></li>
+                <li class="<?= $isPacketClosedForCandidate ? 'is-complete' : '' ?>"><span>4</span><strong>Beküldés</strong></li>
             </ol>
         </section>
     </aside>
@@ -162,17 +145,19 @@ $statusLabel = $isPacketClosedForCandidate
                 <div class="eyebrow">Online kitöltés</div>
                 <h1>Nyilatkozatok áttekintése</h1>
                 <p class="lead">
-                    A kötelező dokumentumok mentése után az összesítőben ellenőrizhető minden adat, majd innen indítható a végleges beküldés.
+                    Menjen végig a lépéseken, ellenőrizze a mentett adatokat és a generált dokumentum-előnézeteket, majd küldje be a csomagot ellenőrzésre.
                 </p>
             </div>
             <span class="status-pill"><?= esc($statusLabel) ?></span>
         </section>
 
         <?php if (!empty($canFinalize)): ?>
-            <section class="primary-next-card">
+            <section class="primary-next-card" id="document-preview-check">
                 <div>
-                    <div class="primary-next-title">A csomag beküldésre kész</div>
-                    <p class="primary-next-text">Ellenőrizze az összesítőt, majd küldje be a csomagot a toborzó és a munkaügy részére.</p>
+                    <div class="primary-next-title">Beküldés előtt ellenőrizhető</div>
+                    <p class="primary-next-text">
+                        <?= (int) $itemStats['previewable'] ?> dokumentumhoz készíthető PDF előnézet. Ezek nem kerülnek tartósan mentésre, csak megtekintésre generálódnak.
+                    </p>
                 </div>
                 <form method="post" action="<?= esc($finalizeUrl) ?>">
                     <?= csrf_field() ?>
@@ -199,8 +184,8 @@ $statusLabel = $isPacketClosedForCandidate
             <section class="content-card document-panel" id="required-declarations">
                 <div class="section-heading">
                     <div>
-                        <h2>Kötelező dokumentumok</h2>
-                        <p class="section-note">Először ezekkel haladjon. A javítandó tételek mindig a lista tetején jelennek meg.</p>
+                        <h2>Kitöltendő dokumentumok</h2>
+                        <p class="section-note">A javítandó tételek kiemelve jelennek meg. A mentett dokumentumoknál beküldés előtt előnézet is nyitható.</p>
                     </div>
                 </div>
 
@@ -210,29 +195,32 @@ $statusLabel = $isPacketClosedForCandidate
                     <ul class="task-list">
                         <?php foreach ($items as $item): ?>
                             <?php
+                            $status = (string) ($item->status ?? '');
+                            $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
+                            $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
                             $badgeClass = 'badge-default';
                             $statusLabelForItem = 'Állapot ismeretlen';
                             $stateClass = 'state-default';
                             $actionLabel = 'Megnyitás';
                             $actionButtonClass = 'btn btn-ghost btn-sm';
 
-                            if ((string) $item->status === 'pending') {
+                            if ($status === 'pending') {
                                 $badgeClass = 'badge-pending';
                                 $statusLabelForItem = 'Kitöltésre vár';
                                 $stateClass = 'state-pending';
                                 $actionLabel = 'Kitöltés';
                                 $actionButtonClass = 'btn btn-primary btn-sm';
-                            } elseif ((string) $item->status === 'completed') {
+                            } elseif ($status === 'completed') {
                                 $badgeClass = $canModifyCompletedItems ? 'badge-completed' : 'badge-review';
                                 $statusLabelForItem = $canModifyCompletedItems ? 'Mentve' : 'Beküldve, ellenőrzés alatt';
                                 $stateClass = $canModifyCompletedItems ? 'state-completed' : 'state-submitted';
                                 $actionLabel = $canModifyCompletedItems ? 'Módosítás' : 'Megtekintés';
-                            } elseif ((string) $item->status === 'accepted') {
+                            } elseif ($status === 'accepted') {
                                 $badgeClass = 'badge-completed';
                                 $statusLabelForItem = 'Elfogadva';
                                 $stateClass = 'state-accepted';
                                 $actionLabel = 'Megtekintés';
-                            } elseif ((string) $item->status === 'rejected') {
+                            } elseif ($status === 'rejected') {
                                 $badgeClass = 'badge-rejected';
                                 $statusLabelForItem = 'Javítás szükséges';
                                 $stateClass = 'state-rejected';
@@ -242,33 +230,28 @@ $statusLabel = $isPacketClosedForCandidate
 
                             $itemUrl = $itemUrls[(int) $item->id] ?? '#';
                             ?>
-                            <li class="task-item <?= esc($stateClass) ?> <?= (string) $item->status === 'rejected' ? 'task-item-warning' : '' ?>">
+                            <li class="task-item <?= esc($stateClass) ?> <?= $status === 'rejected' ? 'task-item-warning' : '' ?>">
                                 <span class="state-dot" aria-hidden="true"></span>
                                 <div class="task-main">
                                     <div class="task-title">
-                                        <a href="<?= esc($itemUrl) ?>">
-                                            <?= esc($item->template_name ?: ('Dokumentum #' . $item->template_id)) ?>
-                                        </a>
+                                        <a href="<?= esc($itemUrl) ?>"><?= esc($item->template_name ?: ('Dokumentum #' . $item->template_id)) ?></a>
                                     </div>
                                     <div class="task-meta">
                                         <?= esc($item->template_category ?: 'Dokumentum') ?>
-                                        <?php if (!empty($item->template_tax_year)): ?>
-                                            · Adóév: <?= esc($item->template_tax_year) ?>
-                                        <?php endif; ?>
-                                        <?php if (!empty($item->template_version)): ?>
-                                            · Verzió: <?= esc($item->template_version) ?>
-                                        <?php endif; ?>
+                                        <?php if (!empty($item->template_tax_year)): ?> · Adóév: <?= esc($item->template_tax_year) ?><?php endif; ?>
+                                        <?php if (!empty($item->template_version)): ?> · Verzió: <?= esc($item->template_version) ?><?php endif; ?>
                                     </div>
 
-                                    <?php if ((string) $item->status === 'rejected' && !empty($item->review_note)): ?>
-                                        <div class="item-note">
-                                            <strong>Javítás oka:</strong> <?= esc($item->review_note) ?>
-                                        </div>
+                                    <?php if ($status === 'rejected' && !empty($item->review_note)): ?>
+                                        <div class="item-note"><strong>Javítás oka:</strong> <?= esc($item->review_note) ?></div>
                                     <?php endif; ?>
                                 </div>
                                 <div class="task-side">
                                     <span class="badge <?= esc($badgeClass) ?>"><?= esc($statusLabelForItem) ?></span>
                                     <a href="<?= esc($itemUrl) ?>" class="<?= esc($actionButtonClass) ?>"><?= esc($actionLabel) ?></a>
+                                    <?php if ($canPreview): ?>
+                                        <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">PDF előnézet</a>
+                                    <?php endif; ?>
                                 </div>
                             </li>
                         <?php endforeach; ?>
@@ -280,7 +263,7 @@ $statusLabel = $isPacketClosedForCandidate
                 <div class="section-heading section-heading-compact">
                     <div>
                         <h2>Összesítő</h2>
-                        <p class="section-note">A mentett adatok rövid ellenőrzése.</p>
+                        <p class="section-note">A mentett adatok és az előnézetek egy helyen.</p>
                     </div>
                 </div>
 
@@ -292,7 +275,10 @@ $statusLabel = $isPacketClosedForCandidate
                     <?php endif; ?>
 
                     <?php foreach ($items as $item): ?>
-                        <?php $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? []; ?>
+                        <?php
+                        $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
+                        $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
+                        ?>
                         <?php if (empty($summaryRows)): ?>
                             <?php continue; ?>
                         <?php endif; ?>
@@ -306,11 +292,14 @@ $statusLabel = $isPacketClosedForCandidate
                                 <?php endforeach; ?>
                             </dl>
 
-                            <?php if ($canModifyCompletedItems): ?>
-                                <div class="actions">
+                            <div class="actions">
+                                <?php if ($canPreview): ?>
+                                    <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">Generált PDF megtekintése</a>
+                                <?php endif; ?>
+                                <?php if ($canModifyCompletedItems): ?>
                                     <a href="<?= esc($itemUrls[(int) $item->id] ?? '#') ?>" class="btn btn-ghost btn-sm">Módosítás</a>
-                                </div>
-                            <?php endif; ?>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
 
@@ -342,9 +331,7 @@ $statusLabel = $isPacketClosedForCandidate
                             <div>
                                 <div class="task-title"><?= esc($template->name) ?></div>
                                 <div class="task-meta">
-                                    <?php if (!empty($template->tax_year)): ?>
-                                        Adóév: <?= esc($template->tax_year) ?> ·
-                                    <?php endif; ?>
+                                    <?php if (!empty($template->tax_year)): ?>Adóév: <?= esc($template->tax_year) ?> · <?php endif; ?>
                                     <?= esc($template->description ?: 'Választható adóügyi nyilatkozat.') ?>
                                 </div>
                             </div>
