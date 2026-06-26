@@ -109,7 +109,7 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
             <div class="sidebar-section-title">Következő lépés</div>
             <p class="sidebar-copy">
                 <?php if (!empty($canFinalize)): ?>
-                    Minden kötelező dokumentum mentve van. Ellenőrizze az adatokat, majd küldje be a csomagot.
+                    Minden kötelező dokumentum mentve van. Nyissa meg az ellenőrző oldalt, nézze át az adatokat, majd ott tudja véglegesen beküldeni.
                 <?php elseif ($nextItem): ?>
                     Haladjon tovább a következő kitöltendő vagy javítandó nyilatkozattal.
                 <?php elseif ($isPacketClosedForCandidate): ?>
@@ -120,10 +120,7 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
             </p>
 
             <?php if (!empty($canFinalize)): ?>
-                <form method="post" action="<?= esc($finalizeUrl) ?>">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-primary btn-block">Végleges beküldés</button>
-                </form>
+                <a href="<?= esc($reviewUrl) ?>" class="btn btn-primary btn-block">Ellenőrzés és beküldés</a>
             <?php elseif ($nextItemUrl): ?>
                 <a href="<?= esc($nextItemUrl) ?>" class="btn btn-primary btn-block"><?= esc($nextItemLabel) ?></a>
             <?php else: ?>
@@ -148,7 +145,7 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
                 <div class="eyebrow">Online kitöltés</div>
                 <h1>Nyilatkozatok áttekintése</h1>
                 <p class="lead">
-                    Itt látja a kitöltendő és már beküldött nyilatkozatokat. A részletek megtekintéséhez nyissa meg az adott dokumentumot.
+                    Itt látja a kitöltendő és már mentett nyilatkozatokat. A végleges beküldés előtt külön ellenőrző oldalon tudja egyben átnézni az összes adatot.
                 </p>
             </div>
             <span class="status-pill"><?= esc($statusLabel) ?></span>
@@ -157,15 +154,12 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
         <?php if (!empty($canFinalize)): ?>
             <section class="primary-next-card" id="document-preview-check">
                 <div>
-                    <div class="primary-next-title">A csomag beküldésre kész</div>
+                    <div class="primary-next-title">A csomag ellenőrzésre kész</div>
                     <p class="primary-next-text">
-                        A mentett dokumentumoknál megtekinthetőek az adatok, és ahol van sablon, PDF előnézet is nyitható.
+                        Minden kötelező dokumentum mentve van. Az összes adat egyben a következő oldalon ellenőrizhető.
                     </p>
                 </div>
-                <form method="post" action="<?= esc($finalizeUrl) ?>">
-                    <?= csrf_field() ?>
-                    <button type="submit" class="btn btn-primary">Végleges beküldés</button>
-                </form>
+                <a href="<?= esc($reviewUrl) ?>" class="btn btn-primary">Ellenőrzés és beküldés</a>
             </section>
         <?php elseif ($itemStats['rejected'] > 0): ?>
             <section class="primary-next-card primary-next-card-danger">
