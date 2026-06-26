@@ -33,6 +33,8 @@ class DeclarationTemplate extends Entity
     public const REQUIRED_CONDITIONAL = 'conditional';
 
     protected $dates = [
+        'effective_from',
+        'effective_to',
         'created_at',
         'updated_at',
     ];
@@ -40,6 +42,7 @@ class DeclarationTemplate extends Entity
     protected $casts = [
         'id' => 'integer',
         'tax_year' => '?integer',
+        'parent_template_id' => '?integer',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
         'needs_signature' => 'boolean',
@@ -52,6 +55,10 @@ class DeclarationTemplate extends Entity
 
         if (!empty($this->attributes['tax_year'])) {
             $name .= ' (' . $this->attributes['tax_year'] . ')';
+        }
+
+        if (!empty($this->attributes['version'])) {
+            $name .= ' · v' . $this->attributes['version'];
         }
 
         return trim($name);
