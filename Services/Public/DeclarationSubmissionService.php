@@ -141,6 +141,69 @@ class DeclarationSubmissionService
         }
     }
 
+    public function removeCandidateSelectedItem(InvitationContext $context, int $itemId): void
+    {
+        if (!in_array((string) $context->packet->status, [
+            DeclarationPacket::STATUS_DRAFT,
+            DeclarationPacket::STATUS_SENT,
+            DeclarationPacket::STATUS_IN_PROGRESS,
+        ], true)) {
+            throw new \RuntimeException('A nyilatkozatcsomag már be lett küldve, ezért nem módosítható.');
+        }
+
+        $item = $this->getItemForContext($context, $itemId);
+
+        if ((int) ($item->template_is_candidate_selectable ?? 0) !== 1) {
+            throw new \RuntimeException('Ez a nyilatkozat nem távolítható el a kitöltő által.');
+        }
+
+        if ((string) $item->status === DeclarationPacketItem::STATUS_ACCEPTED) {
+            throw new \RuntimeException('Elfogadott nyilatkozat már nem távolítható el.');
+        }
+
+        $submission = $this->findSubmissionForItem($itemId);
+        $db = db_connect();
+        $db->transBegin();
+
+        try {
+            if ($submission) {
+                $this->submissionModel->delete((int) $submission->id);
+            }
+
+            $this->itemModel->delete($itemId);
+
+            $this->auditLogModel->logAction(
+                DeclarationAuditLogModel::ACTION_OPTIONAL_TEMPLATE_REMOVED,
+                'declaration_packet_item',
+                $itemId,
+                (int) $context->packet->id,
+                $itemId,
+                (string) $item->status,
+                null,
+                'Beálló által választható nyilatkozat eltávolítva a csomagból.',
+                [
+                    'actor_type' => 'candidate',
+                    'actor_label' => $context->invitation->email ?? null,
+                    'person_id' => (int) $context->packet->person_id,
+                    'employment_relation_id' => (int) $context->packet->employment_relation_id,
+                    'submission_id' => $submission ? (int) $submission->id : null,
+                    'template_id' => (int) $item->template_id,
+                    'template_code' => $item->template_code ?? null,
+                    'template_name' => $item->template_name ?? null,
+                ]
+            );
+
+            if ($db->transStatus() === false) {
+                throw new \RuntimeException('A nyilatkozat eltávolítása sikertelen.');
+            }
+
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            throw $e;
+        }
+    }
+
     public function submit(
         InvitationContext $context,
         object $item,
