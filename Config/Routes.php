@@ -41,6 +41,7 @@ $routes->group('', [
     $routes->get('start/(:segment)/item/(:num)', 'InvitationController::item/$1/$2');
     $routes->get('start/(:segment)/item/(:num)/preview', 'DocumentPreviewController::item/$1/$2');
     $routes->post('start/(:segment)/tax-template/(:num)/select', 'InvitationController::selectTaxTemplate/$1/$2');
+    $routes->post('start/(:segment)/item/(:num)/remove', 'InvitationController::removeItem/$1/$2');
     $routes->post('start/(:segment)/finalize', 'InvitationController::finalize/$1');
     $routes->post('start/(:segment)/item/(:num)', 'InvitationController::submitItem/$1/$2');
 });
