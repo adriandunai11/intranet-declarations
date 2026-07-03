@@ -64,6 +64,10 @@ $statusLabel = $isPacketClosedForCandidate
 $previewUrlFor = static function (object $item) use ($startUrl): string {
     return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/preview';
 };
+
+$removeUrlFor = static function (object $item) use ($startUrl): string {
+    return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/remove';
+};
 ?>
 
 <div class="portal-layout">
@@ -109,9 +113,9 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
             <div class="sidebar-section-title">Következő lépés</div>
             <p class="sidebar-copy">
                 <?php if (!empty($canFinalize)): ?>
-                    Minden kötelező dokumentum mentve van. Nyissa meg az ellenőrző oldalt, nézze át az adatokat, majd ott tudja véglegesen beküldeni.
+                    Minden csomagban lévő dokumentum mentve van. Nyissa meg az ellenőrző oldalt, nézze át az adatokat, majd ott tudja véglegesen beküldeni.
                 <?php elseif ($nextItem): ?>
-                    Haladjon tovább a következő kitöltendő vagy javítandó nyilatkozattal.
+                    Haladjon tovább a következő kitöltendő vagy javítandó nyilatkozattal. Ha egy választható nyilatkozat nem szükséges, a Nem kérem gombbal eltávolítható.
                 <?php elseif ($isPacketClosedForCandidate): ?>
                     A csomag beküldve, az adatok a link érvényességéig megtekinthetők.
                 <?php else: ?>
@@ -156,7 +160,7 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
                 <div>
                     <div class="primary-next-title">A csomag ellenőrzésre kész</div>
                     <p class="primary-next-text">
-                        Minden kötelező dokumentum mentve van. Az összes adat egyben a következő oldalon ellenőrizhető.
+                        Minden csomagban lévő dokumentum mentve van. Az összes adat egyben a következő oldalon ellenőrizhető.
                     </p>
                 </div>
                 <a href="<?= esc($reviewUrl) ?>" class="btn btn-primary">Ellenőrzés és beküldés</a>
@@ -194,6 +198,9 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
                         $status = (string) ($item->status ?? '');
                         $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
                         $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
+                        $canRemoveCandidateSelected = $canModifyCompletedItems
+                            && (int) ($item->template_is_candidate_selectable ?? 0) === 1
+                            && $status !== 'accepted';
                         $badgeClass = 'badge-default';
                         $statusLabelForItem = 'Állapot ismeretlen';
                         $stateClass = 'state-default';
@@ -247,6 +254,12 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
                                 <a href="<?= esc($itemUrl) ?>" class="<?= esc($actionButtonClass) ?>"><?= esc($actionLabel) ?></a>
                                 <?php if ($canPreview): ?>
                                     <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">PDF előnézet</a>
+                                <?php endif; ?>
+                                <?php if ($canRemoveCandidateSelected): ?>
+                                    <form method="post" action="<?= esc($removeUrlFor($item)) ?>" class="inline-action-form">
+                                        <?= csrf_field() ?>
+                                        <button type="submit" class="btn btn-ghost btn-sm">Nem kérem</button>
+                                    </form>
                                 <?php endif; ?>
                             </div>
                         </li>
