@@ -82,6 +82,8 @@ class PacketReviewService
                 DeclarationPacketItem::STATUS_ACCEPTED,
                 null,
                 [
+                    'person_id' => (int) $packet->person_id,
+                    'employment_relation_id' => (int) $packet->employment_relation_id,
                     'submission_id' => (int) $submission->id,
                     'old_submission_status' => $oldSubmissionStatus,
                     'new_submission_status' => DeclarationSubmission::STATUS_ACCEPTED,
@@ -183,7 +185,11 @@ class PacketReviewService
                     null,
                     $oldPacketStatus,
                     DeclarationPacket::STATUS_IN_PROGRESS,
-                    'Nyilatkozat elutasítása miatt a csomag újra folyamatban állapotba került.'
+                    'Nyilatkozat elutasítása miatt a csomag újra folyamatban állapotba került.',
+                    [
+                        'person_id' => (int) $packet->person_id,
+                        'employment_relation_id' => (int) $packet->employment_relation_id,
+                    ]
                 );
             }
 
@@ -199,7 +205,11 @@ class PacketReviewService
                         null,
                         $oldRelationStatus,
                         EmploymentRelation::STATUS_IN_PROGRESS,
-                        'Nyilatkozat elutasítása miatt a beléptetési folyamat újra folyamatban állapotba került.'
+                        'Nyilatkozat elutasítása miatt a beléptetési folyamat újra folyamatban állapotba került.',
+                        [
+                            'person_id' => (int) $packet->person_id,
+                            'employment_relation_id' => (int) $relation->id,
+                        ]
                     );
                 }
             }
@@ -218,6 +228,8 @@ class PacketReviewService
                     DeclarationPacketItem::STATUS_REJECTED,
                     $preparedItem['review_note'],
                     [
+                        'person_id' => (int) $packet->person_id,
+                        'employment_relation_id' => (int) $packet->employment_relation_id,
                         'submission_id' => (int) $submission->id,
                         'old_submission_status' => $preparedItem['old_submission_status'],
                         'new_submission_status' => DeclarationSubmission::STATUS_REJECTED,
@@ -305,7 +317,11 @@ class PacketReviewService
                     null,
                     $oldPacketStatus,
                     DeclarationPacket::STATUS_IN_PROGRESS,
-                    'Admin újranyitás miatt a csomag újra folyamatban állapotba került.'
+                    'Admin újranyitás miatt a csomag újra folyamatban állapotba került.',
+                    [
+                        'person_id' => (int) $packet->person_id,
+                        'employment_relation_id' => (int) $packet->employment_relation_id,
+                    ]
                 );
             }
 
@@ -321,7 +337,11 @@ class PacketReviewService
                         null,
                         $oldRelationStatus,
                         EmploymentRelation::STATUS_IN_PROGRESS,
-                        'Admin újranyitás miatt a beléptetési folyamat újra folyamatban állapotba került.'
+                        'Admin újranyitás miatt a beléptetési folyamat újra folyamatban állapotba került.',
+                        [
+                            'person_id' => (int) $packet->person_id,
+                            'employment_relation_id' => (int) $relation->id,
+                        ]
                     );
                 }
             }
@@ -336,6 +356,8 @@ class PacketReviewService
                 DeclarationPacketItem::STATUS_REJECTED,
                 $reviewNote,
                 [
+                    'person_id' => (int) $packet->person_id,
+                    'employment_relation_id' => (int) $packet->employment_relation_id,
                     'submission_id' => (int) $submission->id,
                     'old_submission_status' => $oldSubmissionStatus,
                     'new_submission_status' => DeclarationSubmission::STATUS_REJECTED,

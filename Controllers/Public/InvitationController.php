@@ -3,6 +3,7 @@
 namespace App\Modules\Declarations\Controllers\Public;
 
 use App\Controllers\BaseController;
+use App\Modules\Declarations\Services\DeclarationForms\DeclarationFormHandlerInterface;
 use App\Modules\Declarations\Services\DeclarationForms\DeclarationFormRegistry;
 use App\Modules\Declarations\Services\DeclarationPacketService;
 use App\Modules\Declarations\Services\Exceptions\DeclarationAlreadySubmittedException;
@@ -76,7 +77,7 @@ class InvitationController extends BaseController
             $optionalTaxTemplateSupport = [];
 
             foreach ($optionalTaxTemplates as $optionalTemplate) {
-                $optionalTaxTemplateSupport[(int) $optionalTemplate->id] = $this->formRegistry->hasConcreteHandlerForCode((string) $optionalTemplate->code);
+                $optionalTaxTemplateSupport[(int) $optionalTemplate->id] = $this->formRegistry->hasConcreteHandlerForTemplate($optionalTemplate);
             }
 
             return view('App\Modules\Declarations\Views\public\invitation\start', [
@@ -138,7 +139,7 @@ class InvitationController extends BaseController
 
             $template = $this->templateModel->find($templateId);
 
-            if (!$template || !$this->formRegistry->hasConcreteHandlerForCode((string) $template->code)) {
+            if (!$template || !$this->formRegistry->hasConcreteHandlerForTemplate($template)) {
                 throw new \RuntimeException('Ez az adóügyi nyilatkozat még nem tölthető ki online.');
             }
 
@@ -259,10 +260,13 @@ class InvitationController extends BaseController
                         $submission
                     ),
                     'startUrl' => $this->urlService->start($context->token),
+                    'previewUrl' => (string) ($item->template_code ?? '') !== 'personal_data_statement'
+                        ? rtrim($this->urlService->start($context->token), '/') . '/item/' . (int) $item->id . '/preview'
+                        : null,
                 ]);
             }
 
-            return view($handler->view(), $this->viewData($context, $item, $submission, $handler->title($item)));
+            return view($handler->view(), $this->viewData($context, $item, $submission, $handler, $handler->title($item)));
         } catch (Throwable $e) {
             return $this->invalid($e->getMessage());
         }
@@ -319,9 +323,15 @@ class InvitationController extends BaseController
         }
     }
 
-    protected function viewData(InvitationContext $context, object $item, $submission, string $title): array
+    protected function viewData(
+        InvitationContext $context,
+        object $item,
+        $submission,
+        DeclarationFormHandlerInterface $handler,
+        string $title
+    ): array
     {
-        return [
+        $data = [
             'title' => $title,
             'invitation' => $context->invitation,
             'packet' => $context->packet,
@@ -330,7 +340,21 @@ class InvitationController extends BaseController
             'submission' => $submission,
             'startUrl' => $this->urlService->start($context->token),
             'itemUrl' => $this->urlService->item($context->token, (int) $item->id),
+            'templateFields' => method_exists($handler, 'editableFields') ? $handler->editableFields() : [],
+            'templateHasPlaceholders' => method_exists($handler, 'hasTemplatePlaceholders') ? $handler->hasTemplatePlaceholders() : false,
+            'templateCanInspect' => method_exists($handler, 'canInspectTemplate') ? $handler->canInspectTemplate() : true,
+            'templateFileAvailable' => method_exists($handler, 'templateFileAvailable') ? $handler->templateFileAvailable() : false,
         ];
+
+        if (method_exists($handler, 'viewData')) {
+            $handlerData = $handler->viewData();
+
+            if (is_array($handlerData)) {
+                $data = array_merge($data, $handlerData);
+            }
+        }
+
+        return $data;
     }
 
     protected function antraVerificationView(InvitationContext $context)

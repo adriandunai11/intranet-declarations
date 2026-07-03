@@ -81,6 +81,8 @@ class DeclarationPacketItemModel extends Model
             'COALESCE(declaration_packet_items.template_file_snapshot, declaration_templates.template_file) AS template_file',
             'declaration_templates.code AS current_template_code',
             'declaration_templates.name AS current_template_name',
+            'declaration_templates.version AS current_template_version',
+            'declaration_templates.template_file AS current_template_file',
             'declaration_templates.category AS template_category',
             'declaration_templates.declaration_group AS template_declaration_group',
             'declaration_templates.review_role AS template_review_role',

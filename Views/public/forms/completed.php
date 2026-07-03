@@ -38,6 +38,10 @@ $helperText = $isAccepted
         <p class="submitted-help">
             <?= esc($helperText) ?>
         </p>
+
+        <?php if (!empty($previewUrl)): ?>
+            <a href="<?= esc($previewUrl) ?>" class="btn btn-primary btn-block" target="_blank" rel="noopener">PDF előnézet</a>
+        <?php endif; ?>
     </aside>
 
     <main class="submitted-main">

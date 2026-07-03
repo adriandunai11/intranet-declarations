@@ -22,6 +22,7 @@ class DeclarationDocumentGenerationService
     protected DeclarationAuditLogModel $auditLogModel;
     protected DeclarationDocumentGenerator $generator;
     protected DeclarationDocumentPlaceholderService $placeholderService;
+    protected DeclarationTemplateFileResolver $templateFileResolver;
 
     public function __construct()
     {
@@ -34,6 +35,7 @@ class DeclarationDocumentGenerationService
         $this->auditLogModel = new DeclarationAuditLogModel();
         $this->generator = new DeclarationDocumentGenerator();
         $this->placeholderService = new DeclarationDocumentPlaceholderService();
+        $this->templateFileResolver = new DeclarationTemplateFileResolver();
     }
 
     public function generateForPacketItem(int $packetId, int $itemId, string $format): string
@@ -63,10 +65,10 @@ class DeclarationDocumentGenerationService
             throw new RuntimeException('A nyilatkozat sablonkódja hiányzik.');
         }
 
-        $templatePath = $this->resolveTemplatePath($item, $templateCode);
+        $templatePath = $this->templateFileResolver->resolveForItem($item);
 
-        if (!is_file($templatePath)) {
-            throw new RuntimeException('A DOCX sablon nem található: ' . $templatePath);
+        if ($templatePath === null) {
+            throw new RuntimeException('A DOCX sablon nem található ehhez a nyilatkozathoz.');
         }
 
         $person = $this->personModel->find((int) $packet->person_id);
@@ -100,6 +102,7 @@ class DeclarationDocumentGenerationService
                 'template_code' => $templateCode,
                 'template_version' => $item->template_version ?? null,
                 'template_file' => $item->template_file ?? null,
+                'resolved_template_path' => $templatePath,
                 'format' => $format,
                 'output_path' => $outputPath,
             ]
@@ -117,19 +120,6 @@ class DeclarationDocumentGenerationService
         }
 
         throw new RuntimeException('A nyilatkozat nem található ebben a csomagban.');
-    }
-
-    private function resolveTemplatePath(object $item, string $templateCode): string
-    {
-        $config = config(\App\Modules\Declarations\Config\Declarations::class);
-        $basePath = rtrim((string) $config->documentTemplatePath, DIRECTORY_SEPARATOR);
-        $templateFile = trim((string) ($item->template_file ?? ''));
-
-        if ($templateFile !== '') {
-            return $basePath . DIRECTORY_SEPARATOR . ltrim($templateFile, DIRECTORY_SEPARATOR);
-        }
-
-        return $basePath . DIRECTORY_SEPARATOR . $templateCode . '.docx';
     }
 
     private function outputPath(int $packetId, int $itemId, string $templateCode, string $format): string

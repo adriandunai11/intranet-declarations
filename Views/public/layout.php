@@ -334,6 +334,12 @@
 
         function initForm(form) {
             formFields(form).forEach(function (input) {
+                if (input.dataset.validationBound === '1') {
+                    return;
+                }
+
+                input.dataset.validationBound = '1';
+
                 ['input', 'change', 'blur'].forEach(function (eventName) {
                     input.addEventListener(eventName, function () {
                         input.dataset.touched = '1';
@@ -343,22 +349,26 @@
                 });
             });
 
-            form.addEventListener('submit', function (event) {
-                formFields(form).forEach(function (input) {
-                    input.dataset.touched = '1';
-                });
+            if (form.dataset.validationFormBound !== '1') {
+                form.dataset.validationFormBound = '1';
 
-                if (!validateForm(form, true)) {
-                    event.preventDefault();
+                form.addEventListener('submit', function (event) {
+                    formFields(form).forEach(function (input) {
+                        input.dataset.touched = '1';
+                    });
 
-                    var summary = form.querySelector('.js-client-errors')
-                        || (form.dataset.errorSummary ? document.querySelector(form.dataset.errorSummary) : null);
+                    if (!validateForm(form, true)) {
+                        event.preventDefault();
 
-                    if (summary) {
-                        summary.scrollIntoView({behavior: 'smooth', block: 'center'});
+                        var summary = form.querySelector('.js-client-errors')
+                            || (form.dataset.errorSummary ? document.querySelector(form.dataset.errorSummary) : null);
+
+                        if (summary) {
+                            summary.scrollIntoView({behavior: 'smooth', block: 'center'});
+                        }
                     }
-                }
-            });
+                });
+            }
 
             validateForm(form, false);
         }

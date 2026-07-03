@@ -75,7 +75,7 @@ class DeclarationPacketService
     {
         $templates = $this->templateModel->findDefaultOnboardingTemplates($taxYear);
         $templates = array_values(array_filter($templates, function ($template): bool {
-            return $this->formRegistry->hasConcreteHandlerForCode((string) ($template->code ?? ''));
+            return $this->formRegistry->hasConcreteHandlerForTemplate($template);
         }));
 
         if (empty($templates)) {
@@ -123,7 +123,7 @@ class DeclarationPacketService
                 throw new RuntimeException('A kiválasztott nyilatkozat nem található vagy nem aktív.');
             }
 
-            if (!$this->formRegistry->hasConcreteHandlerForCode((string) $template->code)) {
+            if (!$this->formRegistry->hasConcreteHandlerForTemplate($template)) {
                 throw new RuntimeException('A kiválasztott nyilatkozat még nem tölthető ki online: ' . ($template->name ?: $template->code));
             }
 
@@ -535,7 +535,7 @@ class DeclarationPacketService
 
         return array_values(array_filter($templates, function ($template) use ($existingTemplateIds): bool {
             return empty($existingTemplateIds[(int) $template->id])
-                && $this->formRegistry->hasConcreteHandlerForCode((string) ($template->code ?? ''));
+                && $this->formRegistry->hasConcreteHandlerForTemplate($template);
         }));
     }
 
@@ -553,7 +553,7 @@ class DeclarationPacketService
             throw new RuntimeException('A kiválasztott nyilatkozat nem található vagy nem aktív.');
         }
 
-        if (!$this->formRegistry->hasConcreteHandlerForCode((string) $template->code)) {
+        if (!$this->formRegistry->hasConcreteHandlerForTemplate($template)) {
             throw new RuntimeException('A kiválasztott nyilatkozat még nem tölthető ki online: ' . ($template->name ?: $template->code));
         }
 
@@ -687,6 +687,8 @@ class DeclarationPacketService
             DeclarationPacketItem::STATUS_PENDING,
             'Beálló által választható adóügyi nyilatkozat hozzáadva a csomaghoz.',
             [
+                'person_id' => (int) $packet->person_id,
+                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'template_id' => (int) $template->id,
                 'template_code' => $template->code ?? null,
                 'template_name' => $template->name ?? null,

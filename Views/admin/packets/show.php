@@ -354,7 +354,7 @@
                                                         <?= form_close() ?>
                                                     </div>
                                                     <div class="text-muted small">
-                                                        A sablon helye: <code>writable/declaration_templates/<?= esc($item->template_code ?: 'template_code') ?>.docx</code>
+                                                        Sablon fájl: <code><?= esc($item->template_file ?: ($item->current_template_file ?? '-')) ?></code>
                                                     </div>
                                                 <?php endif; ?>
                                             <?php endif; ?>

@@ -7,6 +7,59 @@ use App\Modules\Declarations\Entities\DeclarationSubmission;
 class DeclarationDocumentPlaceholderService
 {
     /**
+     * @return list<string>
+     */
+    public function knownPlaceholderKeys(): array
+    {
+        return [
+            'név',
+            'nev',
+            'teljes_név',
+            'teljes_nev',
+            'vezetéknév',
+            'vezeteknev',
+            'keresztnév',
+            'keresztnev',
+            'születési_név',
+            'szuletesi_nev',
+            'anyja_neve',
+            'születési_hely',
+            'szuletesi_hely',
+            'születési_dátum',
+            'szuletesi_datum',
+            'taj',
+            'taj_szám',
+            'taj_szam',
+            'adóazonosító',
+            'adoazonosito',
+            'adószám',
+            'adoszam',
+            'email',
+            'telefon',
+            'bankszámlaszám',
+            'bankszamlaszam',
+            'cég',
+            'ceg',
+            'munkáltató',
+            'munkaltato',
+            'munkáltató_neve',
+            'munkaltato_neve',
+            'jogviszony_kezdete',
+            'jogviszony_vége',
+            'jogviszony_vege',
+            'adóév',
+            'adoev',
+            'dátum',
+            'datum',
+            'nyilatkozat_neve',
+            'nyilatkozat_kód',
+            'nyilatkozat_kod',
+            'csomag_azonosító',
+            'csomag_azonosito',
+        ];
+    }
+
+    /**
      * @return array<string, scalar|null>
      */
     public function build(object $packet, object $item, ?DeclarationSubmission $submission, ?object $person = null, ?object $relation = null, ?object $company = null): array
@@ -44,6 +97,10 @@ class DeclarationDocumentPlaceholderService
             'bankszamlaszam' => $data['bank_account_number'] ?? $data['bank_account'] ?? null,
             'cég' => $company->name ?? null,
             'ceg' => $company->name ?? null,
+            'munkáltató' => $company->name ?? null,
+            'munkaltato' => $company->name ?? null,
+            'munkáltató_neve' => $company->name ?? null,
+            'munkaltato_neve' => $company->name ?? null,
             'jogviszony_kezdete' => $relation->start_date ?? null,
             'jogviszony_vége' => $relation->end_date ?? null,
             'jogviszony_vege' => $relation->end_date ?? null,
@@ -58,13 +115,19 @@ class DeclarationDocumentPlaceholderService
             'csomag_azonosito' => $packet->id ?? null,
         ];
 
+        foreach (($data['template_fields'] ?? []) as $key => $value) {
+            if (is_scalar($value) || $value === null) {
+                $placeholders[(string) $key] = $value;
+            }
+        }
+
         foreach ($data as $key => $value) {
             if (is_scalar($value) || $value === null) {
                 $placeholders[(string) $key] = $value;
             }
         }
 
-        return $placeholders;
+        return $this->withCaseVariants($placeholders);
     }
 
     /**
@@ -92,5 +155,28 @@ class DeclarationDocumentPlaceholderService
         }
 
         return trim((string) ($person->lastname ?? '') . ' ' . (string) ($person->firstname ?? '')) ?: null;
+    }
+
+    /**
+     * @param array<string, scalar|null> $placeholders
+     * @return array<string, scalar|null>
+     */
+    private function withCaseVariants(array $placeholders): array
+    {
+        foreach ($placeholders as $key => $value) {
+            $key = (string) $key;
+
+            if ($key === '') {
+                continue;
+            }
+
+            if (function_exists('mb_convert_case')) {
+                $placeholders[mb_convert_case($key, MB_CASE_TITLE, 'UTF-8')] = $value;
+            } else {
+                $placeholders[ucfirst($key)] = $value;
+            }
+        }
+
+        return $placeholders;
     }
 }
