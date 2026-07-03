@@ -141,6 +141,20 @@ class DeclarationDocumentPlaceholderService
 
         $data = $submission->data_json ?? [];
 
+        if ($data instanceof \stdClass) {
+            $data = (array) $data;
+        }
+
+        if (is_string($data)) {
+            $decoded = json_decode($data, true);
+
+            if (is_string($decoded)) {
+                $decoded = json_decode($decoded, true);
+            }
+
+            $data = is_array($decoded) ? $decoded : [];
+        }
+
         return is_array($data) ? $data : [];
     }
 
