@@ -5,9 +5,15 @@
 <?php
 $items = $items ?? [];
 $summaryRowsByItemId = $summaryRowsByItemId ?? [];
+$packetStatus = (string) ($packet->status ?? '');
+$canModifyItems = in_array($packetStatus, ['draft', 'sent', 'in_progress'], true);
 
 $previewUrlFor = static function (object $item) use ($startUrl): string {
     return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/preview';
+};
+
+$removeUrlFor = static function (object $item) use ($startUrl): string {
+    return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/remove';
 };
 ?>
 
@@ -57,6 +63,9 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
                         <?php
                         $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
                         $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
+                        $canRemoveCandidateSelected = $canModifyItems
+                            && (int) ($item->template_is_candidate_selectable ?? 0) === 1
+                            && (string) ($item->status ?? '') !== 'accepted';
                         $itemUrl = $itemUrls[(int) $item->id] ?? '#';
                         ?>
 
@@ -74,6 +83,13 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
                                     <a href="<?= esc($itemUrl) ?>" class="btn btn-ghost btn-sm">Módosítás</a>
                                     <?php if ($canPreview): ?>
                                         <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">PDF előnézet</a>
+                                    <?php endif; ?>
+                                    <?php if ($canRemoveCandidateSelected): ?>
+                                        <form method="post" action="<?= esc($removeUrlFor($item)) ?>" class="inline-action-form">
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="return_to" value="review">
+                                            <button type="submit" class="btn btn-ghost btn-sm">Nem kérem</button>
+                                        </form>
                                     <?php endif; ?>
                                 </div>
                             </header>
