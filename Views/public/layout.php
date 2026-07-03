@@ -54,6 +54,21 @@
         © <?= date('Y') ?> Miell Group · A hozzáférés a meghívó link lejáratáig él.
     </footer>
 </div>
+
+<dialog class="confirm-dialog" id="declaration-confirm-dialog" aria-labelledby="declaration-confirm-title">
+    <div class="confirm-dialog-card">
+        <div class="confirm-dialog-icon" aria-hidden="true">!</div>
+        <h2 id="declaration-confirm-title">Biztosan eltávolítja?</h2>
+        <p id="declaration-confirm-message">
+            A kiválasztott nyilatkozat törlődik a csomagból. Ha már volt hozzá mentett adat, az is törlésre kerül.
+        </p>
+        <div class="confirm-dialog-actions">
+            <button type="button" class="btn btn-secondary" data-confirm-cancel>Mégsem</button>
+            <button type="button" class="btn btn-danger" data-confirm-submit>Igen, eltávolítom</button>
+        </div>
+    </div>
+</dialog>
+
 <script>
     (function () {
         function digits(value) {
@@ -380,6 +395,80 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             document.querySelectorAll('form[data-live-validation]').forEach(initForm);
+        });
+    }());
+</script>
+<script>
+    (function () {
+        var pendingForm = null;
+
+        function isRemoveForm(form) {
+            return form && form.action && /\/remove(?:\?|$)/.test(form.action);
+        }
+
+        function openDialog(form) {
+            var dialog = document.getElementById('declaration-confirm-dialog');
+            var cancelButton = dialog ? dialog.querySelector('[data-confirm-cancel]') : null;
+
+            pendingForm = form;
+
+            if (!dialog || typeof dialog.showModal !== 'function') {
+                form.dataset.confirmed = '1';
+                form.requestSubmit ? form.requestSubmit() : form.submit();
+                return;
+            }
+
+            dialog.showModal();
+
+            if (cancelButton) {
+                cancelButton.focus();
+            }
+        }
+
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+
+            if (!isRemoveForm(form) || form.dataset.confirmed === '1') {
+                return;
+            }
+
+            event.preventDefault();
+            openDialog(form);
+        }, true);
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var dialog = document.getElementById('declaration-confirm-dialog');
+
+            if (!dialog) {
+                return;
+            }
+
+            var cancelButton = dialog.querySelector('[data-confirm-cancel]');
+            var submitButton = dialog.querySelector('[data-confirm-submit]');
+
+            if (cancelButton) {
+                cancelButton.addEventListener('click', function () {
+                    pendingForm = null;
+                    dialog.close();
+                });
+            }
+
+            if (submitButton) {
+                submitButton.addEventListener('click', function () {
+                    if (!pendingForm) {
+                        dialog.close();
+                        return;
+                    }
+
+                    pendingForm.dataset.confirmed = '1';
+                    dialog.close();
+                    pendingForm.requestSubmit ? pendingForm.requestSubmit() : pendingForm.submit();
+                });
+            }
+
+            dialog.addEventListener('cancel', function () {
+                pendingForm = null;
+            });
         });
     }());
 </script>
