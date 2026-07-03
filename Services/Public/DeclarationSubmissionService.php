@@ -5,7 +5,6 @@ namespace App\Modules\Declarations\Services\Public;
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
 use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationSubmission;
-use App\Modules\Declarations\Entities\DeclarationTemplate;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationSubmissionModel;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
@@ -88,23 +87,31 @@ class DeclarationSubmissionService
 
     public function allRequiredItemsCompleted(InvitationContext $context): bool
     {
+        return $this->allPacketItemsCompleted($context);
+    }
+
+    public function allPacketItemsCompleted(InvitationContext $context): bool
+    {
         foreach ($this->getItemsForContext($context) as $item) {
-            $requiredPolicy = (string) ($item->template_required_policy ?? '');
-            $isCandidateSelectable = (int) ($item->template_is_candidate_selectable ?? 0) === 1;
-
-            if ($requiredPolicy === DeclarationTemplate::REQUIRED_OPTIONAL || $isCandidateSelectable) {
-                continue;
-            }
-
-            if (!in_array((string) $item->status, [
-                DeclarationPacketItem::STATUS_COMPLETED,
-                DeclarationPacketItem::STATUS_ACCEPTED,
-            ], true)) {
+            if (!$this->isItemCompletedForFinalize($item)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    public function incompleteItemsForFinalize(InvitationContext $context): array
+    {
+        $items = [];
+
+        foreach ($this->getItemsForContext($context) as $item) {
+            if (!$this->isItemCompletedForFinalize($item)) {
+                $items[] = $item;
+            }
+        }
+
+        return $items;
     }
 
     public function canFinalize(InvitationContext $context): bool
@@ -113,13 +120,13 @@ class DeclarationSubmissionService
             DeclarationPacket::STATUS_DRAFT,
             DeclarationPacket::STATUS_SENT,
             DeclarationPacket::STATUS_IN_PROGRESS,
-        ], true) && $this->allRequiredItemsCompleted($context);
+        ], true) && $this->allPacketItemsCompleted($context);
     }
 
     public function finalize(InvitationContext $context): void
     {
         if (!$this->canFinalize($context)) {
-            throw new \RuntimeException('A végleges beküldéshez minden kötelező dokumentumot ki kell tölteni.');
+            throw new \RuntimeException('A végleges beküldéshez minden csomagban lévő dokumentumot ki kell tölteni.');
         }
 
         $submittedNow = $this->workflowService->submitPacketIfReady($context);
@@ -269,6 +276,14 @@ class DeclarationSubmissionService
             $db->transRollback();
             throw $e;
         }
+    }
+
+    private function isItemCompletedForFinalize(object $item): bool
+    {
+        return in_array((string) $item->status, [
+            DeclarationPacketItem::STATUS_COMPLETED,
+            DeclarationPacketItem::STATUS_ACCEPTED,
+        ], true);
     }
 
     private function localizedValidationErrors(array $errors): array
