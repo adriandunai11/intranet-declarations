@@ -37,4 +37,9 @@ class PublicUrlService
     {
         return $this->start($token) . '/item/' . $itemId;
     }
+
+    public function removeItem(string $token, int $itemId): string
+    {
+        return $this->item($token, $itemId) . '/remove';
+    }
 }
