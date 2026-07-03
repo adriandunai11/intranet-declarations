@@ -228,7 +228,12 @@ class DeclarationSubmissionService
         }
 
         $data = $handler->normalize($input);
-        $handler->validateNormalized($data);
+
+        try {
+            $handler->validateNormalized($data);
+        } catch (\RuntimeException $e) {
+            throw new FormValidationException([$e->getMessage()]);
+        }
 
         $db = db_connect();
         $db->transBegin();
