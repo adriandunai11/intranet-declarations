@@ -25,6 +25,7 @@ class DeclarationAuditLogModel extends Model
     public const ACTION_ITEM_REJECTED = 'item_rejected';
     public const ACTION_ITEM_REOPENED = 'item_reopened_for_correction';
     public const ACTION_OPTIONAL_TEMPLATE_ADDED = 'optional_template_added';
+    public const ACTION_OPTIONAL_TEMPLATE_REMOVED = 'optional_template_removed';
     public const ACTION_PERSON_DATA_UPDATED = 'person_data_updated_from_submission';
     public const ACTION_RELATION_STATUS_CHANGED = 'relation_status_changed';
     public const ACTION_INVITATION_EMAIL_SENT = 'invitation_email_sent';
@@ -118,21 +119,7 @@ class DeclarationAuditLogModel extends Model
     public function findByPacketId(int $packetId, int $limit = 50): array
     {
         return $this->where('packet_id', $packetId)
-            ->orderBy('id', 'DESC')
-            ->limit($limit)
-            ->findAll();
-    }
-
-    public function findByPersonId(int $personId, int $limit = 50): array
-    {
-        return $this->groupStart()
-                ->where('person_id', $personId)
-                ->orGroupStart()
-                    ->whereIn('entity_type', ['person', 'declaration_person'])
-                    ->where('entity_id', $personId)
-                ->groupEnd()
-            ->groupEnd()
-            ->orderBy('id', 'DESC')
+            ->orderBy('created_at', 'DESC')
             ->limit($limit)
             ->findAll();
     }
