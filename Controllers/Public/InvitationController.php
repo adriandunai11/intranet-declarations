@@ -155,6 +155,34 @@ class InvitationController extends BaseController
         }
     }
 
+    public function removeItem(string $token, int $itemId)
+    {
+        try {
+            $context = $this->contextService->resolveOrFail($token);
+
+            if (!$this->isAntraVerified($context)) {
+                return redirect()
+                    ->to($this->urlService->start($token))
+                    ->with('sError', 'A folytatáshoz először adja meg az Antra azonosítót.');
+            }
+
+            $this->submissionService->removeCandidateSelectedItem($context, $itemId);
+
+            $returnTo = (string) $this->request->getPost('return_to');
+            $targetUrl = $returnTo === 'review' && $this->submissionService->canFinalize($context)
+                ? $this->urlService->review($context->token)
+                : $this->urlService->start($context->token);
+
+            return redirect()
+                ->to($targetUrl)
+                ->with('sSuccess', 'A választható nyilatkozat eltávolítva a csomagból.');
+        } catch (Throwable $e) {
+            return redirect()
+                ->to($this->urlService->start($token))
+                ->with('sError', $e->getMessage());
+        }
+    }
+
     public function review(string $token)
     {
         try {
@@ -169,7 +197,7 @@ class InvitationController extends BaseController
             if (!$this->submissionService->canFinalize($context)) {
                 return redirect()
                     ->to($this->urlService->start($context->token))
-                    ->with('sError', 'Az ellenőrzéshez először minden kötelező dokumentumot ki kell tölteni.');
+                    ->with('sError', 'Az ellenőrzéshez először minden csomagban lévő dokumentumot ki kell tölteni, vagy a nem kért választható nyilatkozatot el kell távolítani.');
             }
 
             $items = $this->submissionService->getItemsForContext($context);
