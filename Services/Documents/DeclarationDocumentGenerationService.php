@@ -23,6 +23,7 @@ class DeclarationDocumentGenerationService
     protected DeclarationDocumentGenerator $generator;
     protected DeclarationDocumentPlaceholderService $placeholderService;
     protected DeclarationTemplateFileResolver $templateFileResolver;
+    protected DeclarationSubmissionPdfGenerator $submissionPdfGenerator;
 
     public function __construct()
     {
@@ -36,6 +37,7 @@ class DeclarationDocumentGenerationService
         $this->generator = new DeclarationDocumentGenerator();
         $this->placeholderService = new DeclarationDocumentPlaceholderService();
         $this->templateFileResolver = new DeclarationTemplateFileResolver();
+        $this->submissionPdfGenerator = new DeclarationSubmissionPdfGenerator();
     }
 
     public function generateForPacketItem(int $packetId, int $itemId, string $format): string
@@ -78,11 +80,7 @@ class DeclarationDocumentGenerationService
         $outputPath = $this->outputPath((int) $packet->id, (int) $item->id, $templateCode, $format);
 
         if ($format === 'pdf') {
-            if ($templatePath === null) {
-                $this->generator->generateSummaryPdf($documentSummary, $outputPath);
-            } else {
-                $this->generator->generatePdf($templatePath, $placeholders, $outputPath, $documentSummary);
-            }
+            $this->submissionPdfGenerator->generate($documentSummary, $outputPath);
         } else {
             if ($templatePath === null) {
                 throw new RuntimeException('A DOCX sablon nem található ehhez a nyilatkozathoz.');
@@ -107,7 +105,7 @@ class DeclarationDocumentGenerationService
                 'template_code' => $templateCode,
                 'template_version' => $item->template_version ?? null,
                 'template_file' => $item->template_file ?? null,
-                'resolved_template_path' => $templatePath,
+                'resolved_template_path' => $format === 'docx' ? $templatePath : null,
                 'format' => $format,
                 'output_path' => $outputPath,
             ]
