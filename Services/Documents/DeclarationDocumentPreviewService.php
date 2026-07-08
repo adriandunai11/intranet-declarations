@@ -18,9 +18,8 @@ class DeclarationDocumentPreviewService
     protected PersonModel $personModel;
     protected EmploymentRelationModel $relationModel;
     protected BasicdataModel $basicdataModel;
-    protected DeclarationDocumentGenerator $generator;
     protected DeclarationDocumentPlaceholderService $placeholderService;
-    protected DeclarationTemplateFileResolver $templateFileResolver;
+    protected DeclarationSubmissionPdfGenerator $submissionPdfGenerator;
 
     public function __construct()
     {
@@ -30,9 +29,8 @@ class DeclarationDocumentPreviewService
         $this->personModel = new PersonModel();
         $this->relationModel = new EmploymentRelationModel();
         $this->basicdataModel = new BasicdataModel();
-        $this->generator = new DeclarationDocumentGenerator();
         $this->placeholderService = new DeclarationDocumentPlaceholderService();
-        $this->templateFileResolver = new DeclarationTemplateFileResolver();
+        $this->submissionPdfGenerator = new DeclarationSubmissionPdfGenerator();
     }
 
     public function generateTemporaryPdfForPacketItem(int $packetId, int $itemId): string
@@ -53,24 +51,16 @@ class DeclarationDocumentPreviewService
         }
 
         $templateCode = trim((string) ($item->template_code ?? ''));
-
-        $templatePath = $this->templateFileResolver->resolveForItem($item);
-
         $person = $this->personModel->find((int) $packet->person_id);
         $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = !empty($packet->company_id)
             ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
             : null;
 
-        $placeholders = $this->placeholderService->build($packet, $item, $submission, $person, $relation, $company);
         $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company);
         $outputPath = $this->previewPath((int) $packet->id, (int) $item->id, $templateCode);
 
-        if ($templatePath === null) {
-            $this->generator->generateSummaryPdf($documentSummary, $outputPath);
-        } else {
-            $this->generator->generatePdf($templatePath, $placeholders, $outputPath, $documentSummary);
-        }
+        $this->submissionPdfGenerator->generate($documentSummary, $outputPath);
 
         return $outputPath;
     }
@@ -99,8 +89,6 @@ class DeclarationDocumentPreviewService
             ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
             : null;
 
-        $templatePath = $this->templateFileResolver->resolveForItem($item);
-
         return [
             'title' => 'Dokumentum előnézet',
             'packet' => $packet,
@@ -109,8 +97,8 @@ class DeclarationDocumentPreviewService
             'person' => $person,
             'relation' => $relation,
             'company' => $company,
-            'templatePath' => $templatePath,
-            'templateFile' => $item->template_file ?? $this->templateFileResolver->firstCandidateLabel($item),
+            'templatePath' => null,
+            'templateFile' => null,
             'documentSummary' => $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company),
             'warning' => $warning,
         ];
@@ -163,8 +151,10 @@ class DeclarationDocumentPreviewService
             . DIRECTORY_SEPARATOR
             . 'packet_' . $packetId
             . '_item_' . $itemId
-            . '_' . $safeCode
-            . '_' . bin2hex(random_bytes(4))
+            . '_'
+            . $safeCode
+            . '_'
+            . bin2hex(random_bytes(4))
             . '.pdf';
     }
 }
