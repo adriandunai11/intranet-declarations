@@ -279,4 +279,66 @@ class DeclarationNotificationService
         ));
     }
 
+    public function notifyEmployeeSelfServiceInvitation(int $packetId, string $invitationUrl): void
+    {
+        $packet = $this->packetModel->find($packetId);
+
+        if (!$packet) {
+            throw new RuntimeException('A nyilatkozatcsomag nem található az értesítéshez.');
+        }
+
+        $person = $this->personModel->find((int) $packet->person_id);
+
+        if (!$person || empty($person->email)) {
+            throw new RuntimeException('A munkavállaló e-mail címe nem található az értesítéshez.');
+        }
+
+        $personName = method_exists($person, 'fullName')
+            ? $person->fullName()
+            : trim(($person->lastname ?? '') . ' ' . ($person->firstname ?? ''));
+
+        $message = view('App\Modules\Declarations\Views\emails\employee_self_service_invitation', [
+            'personName' => $personName,
+            'invitationUrl' => $invitationUrl,
+            'packet' => $packet,
+        ]);
+
+        $config = config(\App\Modules\Declarations\Config\Declarations::class);
+
+        $email = service('email');
+        $email->setFrom($config->mailFromEmail, $config->mailFromName);
+        $email->setTo($person->email);
+        $email->setSubject('Nyilatkozat kitöltése - ' . (string) ($packet->tax_year ?: date('Y')));
+        $email->setMessage($message);
+        $email->setMailType('html');
+
+        if (!$email->send()) {
+            log_message('error', 'Employee self-service invitation email failed: ' . print_r($email->printDebugger(['headers']), true));
+
+            throw new RuntimeException('A kitöltési link e-mail kiküldése sikertelen.');
+        }
+
+        $this->auditLogModel->logAction(
+            'employee_self_service_invitation_email_sent',
+            'declaration_packet',
+            (int) $packet->id,
+            (int) $packet->id,
+            null,
+            null,
+            null,
+            'Saját indítású nyilatkozat kitöltési link kiküldve a munkavállalónak.',
+            [
+                'person_id' => (int) $person->id,
+                'employment_relation_id' => (int) $packet->employment_relation_id,
+                'email' => $person->email,
+                'tax_year' => $packet->tax_year ?? null,
+            ]
+        );
+
+        log_message('info', sprintf(
+            'Employee self-service invitation sent. Packet ID: %d, Email: %s',
+            (int) $packet->id,
+            $person->email
+        ));
+    }
 }
