@@ -167,7 +167,7 @@ class PacketWorkflowService
         if (!empty($context->packet->employment_relation_id)) {
             $relation = $this->relationModel->find((int) $context->packet->employment_relation_id);
 
-            if ($relation && $relation->isOpen()) {
+            if ($relation && $this->canMoveRelationToDeclarationsSubmitted($relation)) {
                 $oldRelationStatus = (string) $relation->status;
                 $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED);
 
@@ -215,5 +215,15 @@ class PacketWorkflowService
         }
 
         return true;
+    }
+
+    private function canMoveRelationToDeclarationsSubmitted(EmploymentRelation $relation): bool
+    {
+        return in_array((string) $relation->status, [
+            EmploymentRelation::STATUS_DRAFT,
+            EmploymentRelation::STATUS_INVITED,
+            EmploymentRelation::STATUS_ONBOARDING,
+            EmploymentRelation::STATUS_IN_PROGRESS,
+        ], true);
     }
 }
