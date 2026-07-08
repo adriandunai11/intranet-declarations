@@ -54,14 +54,22 @@ class MyDeclarationsController extends AdminBaseController
                 $this->request->getPost('template_ids') ?? []
             );
 
-            $this->notificationService->notifyEmployeeSelfServiceInvitation(
-                (int) $result['packet_id'],
-                (string) $result['url']
-            );
+            try {
+                $this->notificationService->notifyEmployeeSelfServiceInvitation(
+                    (int) $result['packet_id'],
+                    (string) $result['url']
+                );
 
-            return redirect()
-                ->to(url('my-declarations'))
-                ->with('sSuccess', 'A nyilatkozat kitöltési link elkészült és e-mailben kiküldtük.');
+                return redirect()
+                    ->to(url('my-declarations'))
+                    ->with('sSuccess', 'A nyilatkozat kitöltési link elkészült és e-mailben kiküldtük.');
+            } catch (Throwable $mailError) {
+                log_message('error', 'Employee self-service invitation mail failed: ' . $mailError->getMessage());
+
+                return redirect()
+                    ->to(url('my-declarations'))
+                    ->with('sError', 'A csomag elkészült, de az e-mail küldés nem sikerült. Ideiglenes kitöltési link: ' . (string) $result['url']);
+            }
         } catch (Throwable $e) {
             log_message('error', 'Employee self-service declaration start failed: ' . $e->getMessage());
             log_message('error', $e->getTraceAsString());
