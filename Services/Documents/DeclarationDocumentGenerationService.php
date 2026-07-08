@@ -67,10 +67,6 @@ class DeclarationDocumentGenerationService
 
         $templatePath = $this->templateFileResolver->resolveForItem($item);
 
-        if ($templatePath === null) {
-            throw new RuntimeException('A DOCX sablon nem található ehhez a nyilatkozathoz.');
-        }
-
         $person = $this->personModel->find((int) $packet->person_id);
         $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = !empty($packet->company_id)
@@ -78,12 +74,21 @@ class DeclarationDocumentGenerationService
             : null;
 
         $placeholders = $this->placeholderService->build($packet, $item, $submission, $person, $relation, $company);
+        $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company);
         $outputPath = $this->outputPath((int) $packet->id, (int) $item->id, $templateCode, $format);
 
         if ($format === 'pdf') {
-            $this->generator->generatePdf($templatePath, $placeholders, $outputPath);
+            if ($templatePath === null) {
+                $this->generator->generateSummaryPdf($documentSummary, $outputPath);
+            } else {
+                $this->generator->generatePdf($templatePath, $placeholders, $outputPath, $documentSummary);
+            }
         } else {
-            $this->generator->generateDocx($templatePath, $placeholders, $outputPath);
+            if ($templatePath === null) {
+                throw new RuntimeException('A DOCX sablon nem található ehhez a nyilatkozathoz.');
+            }
+
+            $this->generator->generateDocx($templatePath, $placeholders, $outputPath, $documentSummary);
         }
 
         $this->auditLogModel->logAction(

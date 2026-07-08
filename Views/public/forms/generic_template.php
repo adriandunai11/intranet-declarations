@@ -94,7 +94,7 @@ $templateName = $item->template_name ?? 'Nyilatkozat';
                 </div>
             <?php elseif (!$templateCanInspect): ?>
                 <div class="notice notice-danger">
-                    A DOCX sablon mezőinek kiolvasásához a szerveren engedélyezni kell a PHP zip extensiont.
+                    A DOCX sablon mezőinek kiolvasásához a szerveren ZipArchive vagy PharData támogatás szükséges.
                 </div>
             <?php elseif (!$templateHasPlaceholders): ?>
                 <div class="notice notice-danger">

@@ -339,6 +339,13 @@
                                                 <?php if ($submission && hasPermissions('declarations_packets_view')): ?>
                                                     <hr>
                                                     <div class="d-flex flex-wrap align-items-center">
+                                                        <a href="<?= url('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/preview') ?>"
+                                                            class="btn btn-outline-info btn-sm mr-2 mb-2"
+                                                            target="_blank"
+                                                            rel="noopener">
+                                                            <i class="fas fa-eye pr-1"></i> Előnézet
+                                                        </a>
+
                                                         <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/generate/docx', ['class' => 'mr-2 mb-2']) ?>
                                                         <?= csrf_field() ?>
                                                         <button type="submit" class="btn btn-outline-primary btn-sm">
@@ -490,12 +497,14 @@
                     <h3 class="card-title mb-0">Nyilatkozatcsomag előzmények</h3>
                 </div>
 
-                <div class="card-body p-0">
-                    <?= view('App\Modules\Declarations\Views\admin\partials\audit_table', [
-                        'auditLogs' => $auditLogs ?? [],
-                        'tableId' => 'packetAuditLogTable',
-                        'emptyText' => 'Még nincs naplózott esemény ehhez a csomaghoz.',
-                    ]) ?>
+                <div class="card-body">
+                    <p class="text-muted">
+                        A csomaghoz, nyilatkozatokhoz, meghívókhoz és ellenőrzésekhez tartozó események külön oldalon, nagyobb nézetben érhetők el.
+                    </p>
+
+                    <a href="<?= url('declarations/packets/' . (int) $packet->id . '/audit') ?>" class="btn btn-default">
+                        <i class="fas fa-history pr-1"></i> Előzmények megnyitása
+                    </a>
                 </div>
             </div>
         </div>
@@ -694,23 +703,5 @@
         <?php endif; ?>
     <?php endforeach; ?>
 <?php endif; ?>
-
-<?= $this->section('js') ?>
-<script>
-    $(function () {
-        if ($.fn.DataTable && $('#packetAuditLogTable').length) {
-            $('#packetAuditLogTable').DataTable({
-                order: [[0, 'desc']],
-                pageLength: 25,
-                autoWidth: false,
-                responsive: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/hu.json'
-                }
-            });
-        }
-    });
-</script>
-<?= $this->endSection() ?>
 
 <?= $this->endSection() ?>

@@ -153,6 +153,10 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                 $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben hibás az adóazonosító jel.';
             }
 
+            if (($field['validation'] ?? '') === 'tax_number_or_fetus' && !$this->isEmptyValue($value) && !$this->isValidTaxNumberOrFetus((string) $value)) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben adóazonosító jelet vagy a "magzat" értéket kell megadni.';
+            }
+
             if (($field['type'] ?? '') === 'select' && !$this->isEmptyValue($value) && !$this->isAllowedOption($field, (string) $value)) {
                 $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben érvénytelen érték szerepel.';
             }
@@ -192,6 +196,10 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
 
                     if (($column['validation'] ?? '') === 'tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidTaxNumber((string) $value)) {
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben hibás az adóazonosító jel.';
+                    }
+
+                    if (($column['validation'] ?? '') === 'tax_number_or_fetus' && !$this->isEmptyValue($value) && !$this->isValidTaxNumberOrFetus((string) $value)) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben adóazonosító jelet vagy a "magzat" értéket kell megadni.';
                     }
 
                     if (($column['type'] ?? '') === 'select' && !$this->isEmptyValue($value) && !$this->isAllowedOption($column, (string) $value)) {
@@ -266,6 +274,16 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             return preg_replace('/\D+/', '', (string) ($value ?? '')) ?? '';
         }
 
+        if (($field['validation'] ?? '') === 'tax_number_or_fetus') {
+            $text = $this->cleanText($value);
+
+            if (function_exists('mb_strtolower') && mb_strtolower($text, 'UTF-8') === 'magzat') {
+                return 'magzat';
+            }
+
+            return preg_replace('/\D+/', '', $text) ?? '';
+        }
+
         return $this->cleanText($value);
     }
 
@@ -300,6 +318,21 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         $options = is_array($field['options'] ?? null) ? $field['options'] : [];
 
         return array_key_exists($value, $options);
+    }
+
+    private function isValidTaxNumberOrFetus(string $value): bool
+    {
+        $value = trim($value);
+
+        if (function_exists('mb_strtolower') && mb_strtolower($value, 'UTF-8') === 'magzat') {
+            return true;
+        }
+
+        if (strtolower($value) === 'magzat') {
+            return true;
+        }
+
+        return $this->identifierValidator->isValidTaxNumber($value);
     }
 
     /**
@@ -360,7 +393,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             }
 
             $repeaterKey = (string) ($repeater['key'] ?? '');
-            $rowSummaries = [];
+            $repeaterTitle = (string) ($repeater['title'] ?? $repeaterKey);
 
             foreach (($repeaters[$repeaterKey] ?? []) as $index => $row) {
                 $parts = [];
@@ -379,12 +412,8 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                 }
 
                 if ($parts !== []) {
-                    $rowSummaries[] = ((int) $index + 1) . '. sor - ' . implode(', ', $parts);
+                    $rows[$repeaterTitle . ' - ' . ((int) $index + 1) . '. sor'] = implode(', ', $parts);
                 }
-            }
-
-            if ($rowSummaries !== []) {
-                $rows[(string) ($repeater['title'] ?? $repeaterKey)] = implode(' | ', $rowSummaries);
             }
         }
 
@@ -477,7 +506,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         }
 
         if (($field['type'] ?? '') === 'select') {
-            return $this->displayValue($field, $value);
+            return is_scalar($value) || $value === null ? $value : '';
         }
 
         return is_scalar($value) || $value === null ? $value : '';
@@ -552,6 +581,8 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         $this->addPlaceholder($placeholders, 'mellozes_reszleges', ($fields['waiver_scope'] ?? '') === 'partial' ? 'X' : '');
         $this->addPlaceholder($placeholders, 'jarulekkedvezmeny_mellozese', !empty($fields['skip_contribution_discount']) ? 'X' : '');
         $this->addPlaceholder($placeholders, 'kulfoldi_kedvezmeny', !empty($fields['foreign_discount_taken']) ? 'X' : '');
+        $this->addPlaceholder($placeholders, 'modosito_nyilatkozat', !empty($fields['modified_statement']) ? 'X' : '');
+        $this->addPlaceholder($placeholders, 'módosító_nyilatkozat', !empty($fields['modified_statement']) ? 'X' : '');
     }
 
     /**

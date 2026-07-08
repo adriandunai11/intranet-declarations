@@ -307,12 +307,6 @@
                 return;
             }
 
-            if (value.length < 2) {
-                setAntraFeedback(input, 'danger', 'Az Antra azonosító legalább 2 karakter legyen.');
-                callback(false);
-                return;
-            }
-
             setAntraFeedback(input, 'muted', 'Ellenőrzés...');
 
             $.get('<?= url('declarations/persons/antra/check') ?>', {

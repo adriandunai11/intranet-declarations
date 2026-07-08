@@ -45,19 +45,34 @@ class DocumentPreviewController extends BaseController
                     ->with('sError', 'Előnézet csak mentett nyilatkozathoz készíthető.');
             }
 
-            $path = $this->previewService->generateTemporaryPdfForPacketItem((int) $context->packet->id, (int) $item->id);
-            $content = file_get_contents($path);
+            try {
+                $path = $this->previewService->generateTemporaryPdfForPacketItem((int) $context->packet->id, (int) $item->id);
+                $content = file_get_contents($path);
 
-            if ($content === false) {
-                throw new \RuntimeException('Az előnézet nem olvasható.');
+                if ($content === false) {
+                    throw new \RuntimeException('Az előnézet nem olvasható.');
+                }
+
+                @unlink($path);
+
+                return $this->response
+                    ->setContentType('application/pdf')
+                    ->setHeader('Content-Disposition', 'inline')
+                    ->setBody($content);
+            } catch (Throwable $previewError) {
+                log_message('error', 'Declaration PDF preview failed: ' . $previewError->getMessage());
+
+                return view('App\Modules\Declarations\Views\public\documents\preview_html', array_merge(
+                    $this->previewService->previewDataForPacketItem(
+                        (int) $context->packet->id,
+                        (int) $item->id,
+                        'A PDF előnézet most nem állítható elő, ezért az online kitöltésből készített dokumentum-előnézetet jelenítjük meg.'
+                    ),
+                    [
+                        'backUrl' => $this->urlService->start($token),
+                    ]
+                ));
             }
-
-            @unlink($path);
-
-            return $this->response
-                ->setContentType('application/pdf')
-                ->setHeader('Content-Disposition', 'inline')
-                ->setBody($content);
         } catch (Throwable $e) {
             return view('App\Modules\Declarations\Views\public\documents\preview_unavailable', [
                 'title' => 'Dokumentum előnézet',

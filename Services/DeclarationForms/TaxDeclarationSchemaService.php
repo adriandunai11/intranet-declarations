@@ -304,7 +304,7 @@ class TaxDeclarationSchemaService
             'max' => $max,
             'add_label' => 'Eltartott hozzáadása',
             'columns' => [
-                $this->text('tax_number', 'Adóazonosító jel', true, 'tax_number'),
+                $this->text('tax_number', 'Adóazonosító jel vagy magzat', true, 'tax_number_or_fetus', 'Magzat esetén írja be: magzat. Egyébként 10 számjegy.'),
                 $this->text('name', 'Név', true),
                 $this->date('change_date', 'Változás időpontja', false),
                 $this->select('em_code', 'EM* kód', $this->dependentQualityOptions(), true, 'Eltartotti minőség kódja.'),

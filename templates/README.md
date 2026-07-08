@@ -12,6 +12,9 @@ Ev kozbeni sablonvaltozasnal javasolt folyamat:
 Helyorzok:
 
 - A generátor a `${kulcs}` formatumu helyorzoket csereli.
+- Ha a `PhpOffice\PhpWord\TemplateProcessor` elerheto az alkalmazasban, a rendszer azt hasznalja a helyorzok cseréjéhez. Ha nem elerheto, a beepitett OOXML csere marad fallbackkent.
+- A NAV altal kiadott forras DOCX fajlokat nem kell es nem szabad utolag atirni csak azert, hogy online kitolthetok legyenek.
+- Ha egy sablon nem tartalmaz helyorzoket, a rendszer a generalt DOCX/PDF peldanyba kulon "Online kitoltesi osszesito" oldalt tesz a mentett urlapadatokkal. Ez nem modositja a `templates` mappaban levo forrasfajlt.
 - Az alap szemelyes, ceges es csomagadatok automatikus kulcsai peldaul: `${név}`, `${adoazonosito}`, `${taj}`, `${cég}`, `${adóév}`, `${dátum}`.
 - Az adougyi nyilatkozatok kulon online urlapot kapnak. A nev, adoazonosito, TAJ, ceg es adoev nem kerul ujra bekerezesre, ezeket a rendszer a szemely/csomag adataibol tolti.
 - Gyermekes nyilatkozatoknal dinamikus sorok vannak. Ha peldaul 4 gyermek van, a kitolto 4 sort rogzit, a generator pedig `gyermek_1_nev`, `gyermek_2_nev`, `gyermek_3_nev`, `gyermek_4_nev` jellegu placeholder kulcsokat is kap.

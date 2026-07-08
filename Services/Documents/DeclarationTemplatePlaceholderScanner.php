@@ -2,6 +2,9 @@
 
 namespace App\Modules\Declarations\Services\Documents;
 
+use DOMDocument;
+use DOMElement;
+use DOMXPath;
 use ZipArchive;
 
 class DeclarationTemplatePlaceholderScanner
@@ -34,7 +37,7 @@ class DeclarationTemplatePlaceholderScanner
 
     public function canReadDocx(): bool
     {
-        return class_exists(ZipArchive::class);
+        return class_exists(ZipArchive::class) || class_exists(\PharData::class);
     }
 
     /**
@@ -44,6 +47,10 @@ class DeclarationTemplatePlaceholderScanner
     {
         if (!is_file($templatePath) || !$this->canReadDocx()) {
             return [];
+        }
+
+        if (!class_exists(ZipArchive::class)) {
+            return $this->placeholdersInTemplateWithPharData($templatePath);
         }
 
         $zip = new ZipArchive();
@@ -80,6 +87,58 @@ class DeclarationTemplatePlaceholderScanner
         return $result;
     }
 
+    /**
+     * @return list<string>
+     */
+    private function placeholdersInTemplateWithPharData(string $templatePath): array
+    {
+        if (!class_exists(\PharData::class)) {
+            return [];
+        }
+
+        try {
+            $archive = new \PharData($templatePath);
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $placeholders = [];
+
+        foreach (new \RecursiveIteratorIterator($archive) as $file) {
+            if (!$file instanceof \SplFileInfo) {
+                continue;
+            }
+
+            $path = str_replace('\\', '/', $file->getPathName());
+            $markerPosition = strrpos($path, '.docx/');
+
+            if ($markerPosition === false) {
+                continue;
+            }
+
+            $name = substr($path, $markerPosition + 6);
+
+            if (!$this->isScannableXml($name) || !isset($archive[$name])) {
+                continue;
+            }
+
+            $xml = $archive[$name]->getContent();
+
+            if (!is_string($xml)) {
+                continue;
+            }
+
+            foreach ($this->extractPlaceholders($xml) as $placeholder) {
+                $placeholders[$placeholder] = true;
+            }
+        }
+
+        $result = array_keys($placeholders);
+        sort($result, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $result;
+    }
+
     private function isScannableXml(string $name): bool
     {
         return $name === 'word/document.xml'
@@ -103,7 +162,7 @@ class DeclarationTemplatePlaceholderScanner
         foreach ($matches[1] as $placeholder) {
             $placeholder = trim((string) $placeholder);
 
-            if ($placeholder !== '') {
+            if ($this->isCleanPlaceholder($placeholder)) {
                 $placeholders[$placeholder] = true;
             }
         }
@@ -113,16 +172,50 @@ class DeclarationTemplatePlaceholderScanner
 
     private function visibleText(string $xml): string
     {
-        if (!preg_match_all('/<w:t\b[^>]*>(.*?)<\/w:t>/si', $xml, $matches)) {
-            return '';
+        $document = new DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $document->loadXML($xml, LIBXML_NONET | LIBXML_NOERROR | LIBXML_NOWARNING);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+
+        if ($loaded) {
+            $xpath = new DOMXPath($document);
+            $xpath->registerNamespace('w', 'http://schemas.openxmlformats.org/wordprocessingml/2006/main');
+
+            $text = '';
+
+            foreach ($xpath->query('//w:t') ?: [] as $node) {
+                if ($node instanceof DOMElement) {
+                    $text .= (string) $node->nodeValue;
+                }
+            }
+
+            return $text;
         }
 
-        $text = '';
+        if (preg_match_all('/<w:t\b[^>]*>(.*?)<\/w:t>/si', $xml, $matches)) {
+            $text = '';
 
-        foreach ($matches[1] as $part) {
-            $text .= html_entity_decode((string) $part, ENT_QUOTES | ENT_XML1, 'UTF-8');
+            foreach ($matches[1] as $part) {
+                $text .= html_entity_decode((string) $part, ENT_QUOTES | ENT_XML1, 'UTF-8');
+            }
+
+            return $text;
         }
 
-        return $text;
+        return '';
+    }
+
+    private function isCleanPlaceholder(string $placeholder): bool
+    {
+        if ($placeholder === '' || strlen($placeholder) > 80) {
+            return false;
+        }
+
+        if (str_contains($placeholder, '<') || str_contains($placeholder, '>') || str_contains($placeholder, '"')) {
+            return false;
+        }
+
+        return (bool) preg_match('/^[\p{L}\p{N}_\-. ]+$/u', $placeholder);
     }
 }

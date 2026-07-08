@@ -258,12 +258,14 @@
                     </h3>
                 </div>
 
-                <div class="card-body p-0">
-                    <?= view('App\Modules\Declarations\Views\admin\partials\audit_table', [
-                        'auditLogs' => $auditLogs ?? [],
-                        'tableId' => 'personAuditLogTable',
-                        'emptyText' => 'Még nincs naplózott esemény ehhez a személyhez.',
-                    ]) ?>
+                <div class="card-body">
+                    <p class="text-muted">
+                        A személyhez és jogviszonyaihoz tartozó naplózott események külön oldalon, nagyobb nézetben érhetők el.
+                    </p>
+
+                    <a href="<?= url('declarations/persons/' . (int) $person->id . '/audit') ?>" class="btn btn-default">
+                        <i class="fas fa-history pr-1"></i> Előzmények megnyitása
+                    </a>
                 </div>
             </div>
         </div>
@@ -518,18 +520,6 @@
                 width: '100%',
                 placeholder: 'Válassz telephelyet...',
                 allowClear: true
-            });
-        }
-
-        if ($.fn.DataTable && $('#personAuditLogTable').length) {
-            $('#personAuditLogTable').DataTable({
-                order: [[0, 'desc']],
-                pageLength: 25,
-                autoWidth: false,
-                responsive: true,
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/hu.json'
-                }
             });
         }
     });

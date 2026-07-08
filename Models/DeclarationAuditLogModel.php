@@ -118,7 +118,30 @@ class DeclarationAuditLogModel extends Model
 
     public function findByPacketId(int $packetId, int $limit = 50): array
     {
-        return $this->where('packet_id', $packetId)
+        return $this->groupStart()
+            ->where('packet_id', $packetId)
+            ->orGroupStart()
+                ->where('entity_type', 'declaration_packet')
+                ->where('entity_id', $packetId)
+            ->groupEnd()
+        ->groupEnd()
+            ->orderBy('created_at', 'DESC')
+            ->limit($limit)
+            ->findAll();
+    }
+
+    public function findByPersonId(int $personId, int $limit = 50): array
+    {
+        return $this->groupStart()
+            ->groupStart()
+                ->whereIn('entity_type', ['person', 'declaration_person'])
+                ->where('entity_id', $personId)
+            ->groupEnd()
+            ->orGroupStart()
+                ->whereIn('entity_type', ['employment_relation', 'declaration_employment_relation'])
+                ->where('person_id', $personId)
+            ->groupEnd()
+        ->groupEnd()
             ->orderBy('created_at', 'DESC')
             ->limit($limit)
             ->findAll();

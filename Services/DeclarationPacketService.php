@@ -490,7 +490,6 @@ class DeclarationPacketService
         }
 
         $details['reviewItems'] = $reviewItems;
-        $details['auditLogs'] = $this->auditLogModel->findByPacketId((int) $packet->id, 30);
         $details['canEditPacketItems'] = $this->canEditPacketItems($packet);
         $details['editableTemplates'] = $details['canEditPacketItems']
             ? $this->getEditableTemplatesForPacket((int) $packet->id)

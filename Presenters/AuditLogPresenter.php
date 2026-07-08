@@ -23,6 +23,7 @@ class AuditLogPresenter
         'packet_item_created' => 'Nyilatkozat létrehozva',
         'packet_item_added_by_admin' => 'Nyilatkozat hozzáadva',
         'optional_template_added' => 'Választható nyilatkozat hozzáadva',
+        'optional_template_removed' => 'Választható nyilatkozat eltávolítva',
         'item_submitted' => 'Nyilatkozat mentve',
         'item_resubmitted' => 'Nyilatkozat javítva',
         'item_accepted' => 'Nyilatkozat elfogadva',
@@ -58,13 +59,15 @@ class AuditLogPresenter
         'created' => ['Létrehozva', 'info'],
         'opened' => ['Megnyitva', 'primary'],
         'pending' => ['Kitöltésre vár', 'secondary'],
-        'in_progress' => ['Folyamatban', 'warning'],
+        'in_progress' => ['Kitöltés alatt', 'warning'],
         'submitted' => ['Ellenőrzésre vár', 'primary'],
         'declarations_submitted' => ['Nyilatkozatok ellenőrzésen', 'primary'],
         'completed' => ['Elkészült', 'success'],
         'accepted' => ['Elfogadva', 'success'],
         'approved' => ['Elfogadva', 'success'],
         'active' => ['Aktív', 'success'],
+        'onboarding' => ['Beléptetés alatt', 'warning'],
+        'invited' => ['Meghívó kiküldve', 'info'],
         'rejected' => ['Elutasítva', 'danger'],
         'revoked' => ['Visszavonva', 'danger'],
         'closed' => ['Lezárva', 'dark'],
@@ -72,26 +75,63 @@ class AuditLogPresenter
     ];
 
     private array $payloadLabels = [
+        'antra_id' => 'Antra azonosító',
+        'lastname' => 'Vezetéknév',
+        'firstname' => 'Keresztnév',
+        'birth_name' => 'Születési név',
+        'mother_name' => 'Anyja neve',
+        'birth_place' => 'Születési hely',
+        'birth_date' => 'Születési dátum',
+        'tax_number' => 'Adóazonosító jel',
+        'taj_number' => 'TAJ szám',
+        'phone' => 'Telefonszám',
+        'email' => 'E-mail',
+        'status' => 'Státusz',
         'template_name' => 'Nyilatkozat',
         'template_code' => 'Kód',
         'template_id' => 'Sablon ID',
         'template_version' => 'Sablon verzió',
         'template_file' => 'Sablon fájl',
+        'resolved_template_path' => 'Feloldott sablon',
+        'output_path' => 'Kimeneti fájl',
         'format' => 'Formátum',
         'tax_year' => 'Adóév',
-        'email' => 'E-mail',
         'recipients' => 'Címzettek',
         'rejected_count' => 'Elutasított tételek',
         'rejected_items' => 'Elutasított nyilatkozatok',
         'revoked_active_invitations' => 'Visszavont aktív linkek',
         'expires_at' => 'Lejárat',
         'company_id' => 'Cég ID',
+        'location_id' => 'Telephely ID',
+        'primary_recruiter_user_id' => 'Elsődleges toborzó',
+        'reviewed_by_user_id' => 'Ellenőrizte',
+        'created_by_user_id' => 'Létrehozta',
+        'updated_by_user_id' => 'Módosította',
+        'closed_by_user_id' => 'Lezárta',
+        'reopened_by_user_id' => 'Visszanyitotta',
         'updated_fields' => 'Módosított mezők',
+        'tax_number_changed' => 'Adóazonosító változott',
+        'taj_number_changed' => 'TAJ változott',
+        'phone_changed' => 'Telefonszám változott',
+        'start_date' => 'Kezdés dátuma',
         'end_date' => 'Lezárás dátuma',
+        'old_end_date' => 'Korábbi lezárás dátuma',
         'invitation_id' => 'Meghívó ID',
         'submission_id' => 'Beküldés ID',
         'submitted_length' => 'Megadott Antra hossza',
-        'expected_present' => 'Rögzített Antra',
+        'expected_present' => 'Rögzített Antra volt',
+        'old_submission_status' => 'Korábbi beküldési státusz',
+        'new_submission_status' => 'Új beküldési státusz',
+        'review_note' => 'Megjegyzés',
+    ];
+
+    private array $contextLabels = [
+        'person_id' => 'Személy',
+        'employment_relation_id' => 'Jogviszony',
+        'packet_id' => 'Csomag',
+        'packet_item_id' => 'Nyilatkozat',
+        'submission_id' => 'Beküldés',
+        'invitation_id' => 'Meghívó',
     ];
 
     public function rows(array $auditLogs): array
@@ -105,17 +145,31 @@ class AuditLogPresenter
         $action = (string) ($auditLog->action ?? '');
         $entityType = (string) ($auditLog->entity_type ?? '');
         $entityLabel = $this->entityLabels[$entityType] ?? ($entityType !== '' ? $entityType : 'Esemény');
-        $entityId = !empty($auditLog->entity_id) ? '#' . (int) $auditLog->entity_id : '';
+        $entityId = !empty($auditLog->entity_id) ? (int) $auditLog->entity_id : null;
+        $tone = $this->toneForAction($action);
 
         return [
             'created_at' => (string) ($auditLog->created_at ?: '-'),
-            'title' => $this->actionLabels[$action] ?? ($action !== '' ? $action : '-'),
-            'scope' => trim($entityLabel . ' ' . $entityId),
+            'created_date' => $this->datePart((string) ($auditLog->created_at ?? '')),
+            'created_time' => $this->timePart((string) ($auditLog->created_at ?? '')),
+            'action' => $action,
+            'title' => $this->actionLabels[$action] ?? ($action !== '' ? $this->humanizeKey($action) : '-'),
+            'tone' => $tone,
+            'icon' => $this->iconForAction($action),
+            'scope' => [
+                'label' => $entityLabel,
+                'id' => $entityId,
+                'text' => $entityLabel . ($entityId ? ' #' . $entityId : ''),
+            ],
             'context' => $this->contextParts($auditLog),
-            'details' => $this->details($auditLog, $payload),
-            'old_status' => $this->status((string) ($auditLog->old_status ?? '')),
-            'new_status' => $this->status((string) ($auditLog->new_status ?? '')),
-            'actor' => $this->actorLabel($auditLog),
+            'note' => trim((string) ($auditLog->note ?? '')),
+            'details' => $this->details($payload),
+            'status' => [
+                'old' => $this->status((string) ($auditLog->old_status ?? '')),
+                'new' => $this->status((string) ($auditLog->new_status ?? '')),
+            ],
+            'actor' => $this->actor($auditLog),
+            'technical' => $this->technicalDetails($auditLog),
         ];
     }
 
@@ -123,46 +177,77 @@ class AuditLogPresenter
     {
         $parts = [];
 
-        foreach ([
-            'person_id' => 'személy',
-            'employment_relation_id' => 'jogviszony',
-            'packet_id' => 'csomag',
-            'packet_item_id' => 'nyilatkozat',
-            'submission_id' => 'beküldés',
-            'invitation_id' => 'meghívó',
-        ] as $field => $label) {
+        foreach ($this->contextLabels as $field => $label) {
             if (empty($auditLog->{$field})) {
                 continue;
             }
 
-            if ($field === 'packet_id' && (int) $auditLog->{$field} === (int) ($auditLog->entity_id ?? 0)) {
+            if (
+                in_array($field, ['person_id', 'packet_id', 'packet_item_id', 'submission_id', 'invitation_id'], true)
+                && (int) $auditLog->{$field} === (int) ($auditLog->entity_id ?? 0)
+            ) {
                 continue;
             }
 
-            if ($field === 'packet_item_id' && (int) $auditLog->{$field} === (int) ($auditLog->entity_id ?? 0)) {
-                continue;
-            }
-
-            $parts[] = $label . ' #' . (int) $auditLog->{$field};
+            $parts[] = [
+                'label' => $label,
+                'value' => '#' . (int) $auditLog->{$field},
+            ];
         }
 
         return $parts;
     }
 
-    private function details(object $auditLog, array $payload): array
+    private function details(array $payload): array
     {
         $details = [];
 
-        if (!empty($auditLog->note)) {
-            $details[] = (string) $auditLog->note;
+        foreach ($this->changedDetails($payload) as $detail) {
+            $details[] = $detail;
         }
 
-        foreach ($this->payloadLabels as $key => $label) {
-            if (!array_key_exists($key, $payload)) {
+        foreach ($payload as $key => $value) {
+            if (in_array((string) $key, ['actor_type', 'actor_label', 'actor_user_id', 'person_id', 'employment_relation_id', 'packet_id', 'packet_item_id', 'submission_id', 'invitation_id', 'old', 'new'], true)) {
                 continue;
             }
 
-            $details[] = $label . ': ' . $this->formatValue($payload[$key]);
+            if (is_array($value) && $this->isAssociative($value) && !isset($this->payloadLabels[$key])) {
+                continue;
+            }
+
+            $details[] = [
+                'label' => $this->payloadLabels[$key] ?? $this->humanizeKey((string) $key),
+                'value' => $this->formatValue($value),
+            ];
+        }
+
+        return $this->deduplicateDetails($details);
+    }
+
+    private function changedDetails(array $payload): array
+    {
+        $old = is_array($payload['old'] ?? null) ? $payload['old'] : null;
+        $new = is_array($payload['new'] ?? null) ? $payload['new'] : null;
+
+        if ($old === null && $new === null) {
+            return [];
+        }
+
+        $keys = array_unique(array_merge(array_keys($old ?? []), array_keys($new ?? [])));
+        $details = [];
+
+        foreach ($keys as $key) {
+            $oldValue = $old[$key] ?? null;
+            $newValue = $new[$key] ?? null;
+
+            if ($this->formatValue($oldValue) === $this->formatValue($newValue)) {
+                continue;
+            }
+
+            $details[] = [
+                'label' => $this->payloadLabels[$key] ?? $this->humanizeKey((string) $key),
+                'value' => $this->formatValue($oldValue) . ' -> ' . $this->formatValue($newValue),
+            ];
         }
 
         return $details;
@@ -174,7 +259,7 @@ class AuditLogPresenter
             return null;
         }
 
-        [$label, $class] = $this->statusLabels[$status] ?? [$status, 'secondary'];
+        [$label, $class] = $this->statusLabels[$status] ?? [$this->humanizeKey($status), 'secondary'];
 
         return [
             'label' => $label,
@@ -182,17 +267,111 @@ class AuditLogPresenter
         ];
     }
 
-    private function actorLabel(object $auditLog): string
+    private function actor(object $auditLog): array
     {
-        if (!empty($auditLog->actor_label)) {
-            return (string) $auditLog->actor_label;
+        $actorType = (string) ($auditLog->actor_type ?? '');
+        $label = trim((string) ($auditLog->actor_label ?? ''));
+
+        if ($label === '' && !empty($auditLog->actor_user_id)) {
+            $label = 'Felhasználó #' . (int) $auditLog->actor_user_id;
         }
 
-        if (!empty($auditLog->actor_user_id)) {
-            return 'Felhasználó #' . (int) $auditLog->actor_user_id;
+        if ($label === '') {
+            $label = $this->actorTypeLabel($actorType);
         }
 
-        return (string) ($auditLog->actor_type ?: '-');
+        return [
+            'label' => $label !== '' ? $label : '-',
+            'type' => $this->actorTypeLabel($actorType),
+            'class' => $this->actorClass($actorType),
+        ];
+    }
+
+    private function actorTypeLabel(string $actorType): string
+    {
+        return [
+            'candidate' => 'Kitöltő',
+            'admin_user' => 'Admin',
+            'system' => 'Rendszer',
+            'payroll' => 'Munkaügy',
+            'recruiter' => 'Toborzó',
+        ][$actorType] ?? ($actorType !== '' ? $this->humanizeKey($actorType) : 'Rendszer');
+    }
+
+    private function actorClass(string $actorType): string
+    {
+        return [
+            'candidate' => 'info',
+            'admin_user' => 'primary',
+            'system' => 'secondary',
+            'payroll' => 'success',
+            'recruiter' => 'warning',
+        ][$actorType] ?? 'secondary';
+    }
+
+    private function technicalDetails(object $auditLog): array
+    {
+        $details = [];
+
+        if (!empty($auditLog->ip_address)) {
+            $details[] = 'IP: ' . (string) $auditLog->ip_address;
+        }
+
+        return $details;
+    }
+
+    private function toneForAction(string $action): string
+    {
+        if (str_contains($action, 'failed') || str_contains($action, 'rejected') || str_contains($action, 'revoked') || str_contains($action, 'cancelled')) {
+            return 'danger';
+        }
+
+        if (str_contains($action, 'accepted') || str_contains($action, 'approved') || str_contains($action, 'completed') || str_contains($action, 'succeeded')) {
+            return 'success';
+        }
+
+        if (str_contains($action, 'reopened') || str_contains($action, 'regenerated') || str_contains($action, 'closed')) {
+            return 'warning';
+        }
+
+        if (str_contains($action, 'email') || str_contains($action, 'document') || str_contains($action, 'invitation')) {
+            return 'info';
+        }
+
+        return 'primary';
+    }
+
+    private function iconForAction(string $action): string
+    {
+        if (str_contains($action, 'email')) {
+            return 'fa-envelope';
+        }
+
+        if (str_contains($action, 'document')) {
+            return 'fa-file-alt';
+        }
+
+        if (str_contains($action, 'invitation')) {
+            return 'fa-link';
+        }
+
+        if (str_contains($action, 'person')) {
+            return 'fa-user';
+        }
+
+        if (str_contains($action, 'relation')) {
+            return 'fa-briefcase';
+        }
+
+        if (str_contains($action, 'rejected') || str_contains($action, 'failed')) {
+            return 'fa-times';
+        }
+
+        if (str_contains($action, 'accepted') || str_contains($action, 'approved') || str_contains($action, 'succeeded')) {
+            return 'fa-check';
+        }
+
+        return 'fa-history';
     }
 
     private function decodePayload($raw): array
@@ -225,6 +404,25 @@ class AuditLogPresenter
         }
 
         if (is_array($value)) {
+            return $this->formatArray($value);
+        }
+
+        if ($value === null || $value === '') {
+            return '-';
+        }
+
+        $text = (string) $value;
+
+        return $this->truncate($text, 140);
+    }
+
+    private function formatArray(array $value): string
+    {
+        if ($value === []) {
+            return '-';
+        }
+
+        if (!$this->isAssociative($value)) {
             $parts = [];
 
             foreach ($value as $item) {
@@ -234,23 +432,81 @@ class AuditLogPresenter
                 }
 
                 if (is_array($item)) {
-                    $parts[] = (string) ($item['template_name'] ?? $item['name'] ?? $item['id'] ?? '-');
+                    $parts[] = (string) ($item['template_name'] ?? $item['name'] ?? $item['email'] ?? $item['id'] ?? '-');
                 }
             }
 
-            return $parts !== [] ? implode(', ', array_slice($parts, 0, 5)) : '-';
+            return $this->truncate(implode(', ', array_filter($parts)), 180) ?: '-';
         }
 
-        if ($value === null || $value === '') {
-            return '-';
+        $parts = [];
+
+        foreach ($value as $key => $item) {
+            if (is_array($item)) {
+                continue;
+            }
+
+            $parts[] = ($this->payloadLabels[$key] ?? $this->humanizeKey((string) $key)) . ': ' . $this->formatValue($item);
         }
 
-        $text = (string) $value;
+        return $this->truncate(implode(', ', $parts), 180) ?: '-';
+    }
 
+    private function datePart(string $value): string
+    {
+        $timestamp = strtotime($value);
+
+        return $timestamp ? date('Y.m.d.', $timestamp) : ($value ?: '-');
+    }
+
+    private function timePart(string $value): string
+    {
+        $timestamp = strtotime($value);
+
+        return $timestamp ? date('H:i:s', $timestamp) : '';
+    }
+
+    private function humanizeKey(string $key): string
+    {
+        $label = str_replace(['_', '-'], ' ', $key);
+
+        if (function_exists('mb_convert_case')) {
+            return mb_convert_case($label, MB_CASE_TITLE, 'UTF-8');
+        }
+
+        return ucfirst($label);
+    }
+
+    private function truncate(string $text, int $length): string
+    {
         if (function_exists('mb_strlen') && function_exists('mb_substr')) {
-            return mb_strlen($text) > 110 ? mb_substr($text, 0, 107) . '...' : $text;
+            return mb_strlen($text) > $length ? mb_substr($text, 0, $length - 3) . '...' : $text;
         }
 
-        return strlen($text) > 110 ? substr($text, 0, 107) . '...' : $text;
+        return strlen($text) > $length ? substr($text, 0, $length - 3) . '...' : $text;
+    }
+
+    private function isAssociative(array $array): bool
+    {
+        return array_keys($array) !== range(0, count($array) - 1);
+    }
+
+    private function deduplicateDetails(array $details): array
+    {
+        $seen = [];
+        $result = [];
+
+        foreach ($details as $detail) {
+            $key = (string) ($detail['label'] ?? '') . ':' . (string) ($detail['value'] ?? '');
+
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $result[] = $detail;
+        }
+
+        return $result;
     }
 }

@@ -54,15 +54,7 @@ class DeclarationDocumentPreviewService
 
         $templateCode = trim((string) ($item->template_code ?? ''));
 
-        if ($templateCode === '' || $templateCode === 'personal_data_statement') {
-            throw new RuntimeException('Ehhez a nyilatkozathoz nincs külön PDF sablon. Az adatok az összesítőben ellenőrizhetők.');
-        }
-
         $templatePath = $this->templateFileResolver->resolveForItem($item);
-
-        if ($templatePath === null) {
-            throw new RuntimeException('A dokumentum sablon még nincs feltöltve ehhez a nyilatkozathoz.');
-        }
 
         $person = $this->personModel->find((int) $packet->person_id);
         $relation = $this->relationModel->find((int) $packet->employment_relation_id);
@@ -71,11 +63,57 @@ class DeclarationDocumentPreviewService
             : null;
 
         $placeholders = $this->placeholderService->build($packet, $item, $submission, $person, $relation, $company);
+        $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company);
         $outputPath = $this->previewPath((int) $packet->id, (int) $item->id, $templateCode);
 
-        $this->generator->generatePdf($templatePath, $placeholders, $outputPath);
+        if ($templatePath === null) {
+            $this->generator->generateSummaryPdf($documentSummary, $outputPath);
+        } else {
+            $this->generator->generatePdf($templatePath, $placeholders, $outputPath, $documentSummary);
+        }
 
         return $outputPath;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function previewDataForPacketItem(int $packetId, int $itemId, ?string $warning = null): array
+    {
+        $packet = $this->packetModel->find($packetId);
+
+        if (!$packet) {
+            throw new RuntimeException('A nyilatkozatcsomag nem található.');
+        }
+
+        $item = $this->findItemForPacket($packetId, $itemId);
+        $submission = $this->submissionModel->findByPacketItemId($itemId);
+
+        if (!$submission) {
+            throw new RuntimeException('Ehhez a nyilatkozathoz még nincs mentett adat, ezért nem készíthető előnézet.');
+        }
+
+        $person = $this->personModel->find((int) $packet->person_id);
+        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
+        $company = !empty($packet->company_id)
+            ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
+            : null;
+
+        $templatePath = $this->templateFileResolver->resolveForItem($item);
+
+        return [
+            'title' => 'Dokumentum előnézet',
+            'packet' => $packet,
+            'item' => $item,
+            'submission' => $submission,
+            'person' => $person,
+            'relation' => $relation,
+            'company' => $company,
+            'templatePath' => $templatePath,
+            'templateFile' => $item->template_file ?? $this->templateFileResolver->firstCandidateLabel($item),
+            'documentSummary' => $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company),
+            'warning' => $warning,
+        ];
     }
 
     public function cleanupOldPreviews(): void

@@ -36,7 +36,7 @@
                         <label for="antra_id">Antra azonosító</label>
                         <input type="text" id="antra_id" name="antra_id"
                             value="<?= esc(old('antra_id', '')) ?>"
-                            autocomplete="off" data-validate="required|min:2" data-label="Antra azonosító" required autofocus>
+                            autocomplete="off" data-validate="required|min:1" data-label="Antra azonosító" required autofocus>
                     </div>
 
                     <div class="form-actions-row form-actions-row-end">

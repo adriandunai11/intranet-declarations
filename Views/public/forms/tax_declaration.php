@@ -57,6 +57,10 @@ $rulesForField = static function (array $field): string {
         $rules[] = 'tax_number';
     }
 
+    if (($field['validation'] ?? '') === 'tax_number_or_fetus') {
+        $rules[] = 'tax_number_or_fetus';
+    }
+
     return implode('|', $rules);
 };
 
@@ -104,6 +108,8 @@ $renderField = static function (array $field, string $name, string $id, $value) 
 
         if (($field['validation'] ?? '') === 'tax_number') {
             $formatAttributes = ' inputmode="numeric" maxlength="10" data-format="digits" data-max-digits="10" placeholder="10 számjegy"';
+        } elseif (($field['validation'] ?? '') === 'tax_number_or_fetus') {
+            $formatAttributes = ' maxlength="10" placeholder="10 számjegy vagy magzat"';
         } elseif ($type === 'number') {
             $formatAttributes = ' inputmode="numeric" data-format="digits"';
         }

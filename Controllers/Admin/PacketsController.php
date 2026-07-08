@@ -7,6 +7,7 @@ use App\Modules\Declarations\Services\DeclarationPacketService;
 use App\Modules\Declarations\Services\PacketReviewService;
 use App\Modules\Declarations\Services\DeclarationNotificationService;
 use App\Modules\Declarations\Services\Documents\DeclarationDocumentGenerationService;
+use App\Modules\Declarations\Services\Documents\DeclarationDocumentPreviewService;
 use Throwable;
 
 class PacketsController extends AdminBaseController
@@ -19,6 +20,7 @@ class PacketsController extends AdminBaseController
     protected PacketReviewService $packetReviewService;
     protected DeclarationNotificationService $notificationService;
     protected DeclarationDocumentGenerationService $documentGenerationService;
+    protected DeclarationDocumentPreviewService $documentPreviewService;
 
     public function __construct()
     {
@@ -26,6 +28,7 @@ class PacketsController extends AdminBaseController
         $this->packetReviewService = new PacketReviewService();
         $this->notificationService = new DeclarationNotificationService();
         $this->documentGenerationService = new DeclarationDocumentGenerationService();
+        $this->documentPreviewService = new DeclarationDocumentPreviewService();
 
     }
 
@@ -218,6 +221,48 @@ class PacketsController extends AdminBaseController
             return $this->response->download($path, null);
         } catch (Throwable $e) {
             $this->logFailure('packet_item_document_generate', $e);
+
+            return redirect()
+                ->to(url('declarations/packets/' . $packetId))
+                ->with('sError', $e->getMessage());
+        }
+    }
+
+    public function previewItemDocument(int $packetId, int $itemId)
+    {
+        $this->permissionCheck('declarations_packets_view');
+
+        try {
+            try {
+                $path = $this->documentPreviewService->generateTemporaryPdfForPacketItem($packetId, $itemId);
+                $content = file_get_contents($path);
+
+                if ($content === false) {
+                    throw new \RuntimeException('Az előnézet nem olvasható.');
+                }
+
+                @unlink($path);
+
+                return $this->response
+                    ->setContentType('application/pdf')
+                    ->setHeader('Content-Disposition', 'inline')
+                    ->setBody($content);
+            } catch (Throwable $previewError) {
+                $this->logFailure('packet_item_document_preview_pdf', $previewError);
+
+                return view('App\Modules\Declarations\Views\admin\documents\preview_html', array_merge(
+                    $this->documentPreviewService->previewDataForPacketItem(
+                        $packetId,
+                        $itemId,
+                        'A PDF előnézet most nem állítható elő, ezért az online kitöltésből készített dokumentum-előnézet látható.'
+                    ),
+                    [
+                        'backUrl' => url('declarations/packets/' . $packetId),
+                    ]
+                ));
+            }
+        } catch (Throwable $e) {
+            $this->logFailure('packet_item_document_preview', $e);
 
             return redirect()
                 ->to(url('declarations/packets/' . $packetId))

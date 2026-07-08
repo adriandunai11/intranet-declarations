@@ -222,6 +222,20 @@
                     }
                 }
 
+                if (rule === 'tax_number_or_fetus' && !isEmpty(input)) {
+                    if (value.toLowerCase() === 'magzat') {
+                        continue;
+                    }
+
+                    if (cleanDigits.length !== 10) {
+                        return 'Adjon meg 10 számjegyű adóazonosító jelet, vagy írja be: magzat.';
+                    }
+
+                    if (!isValidTaxNumber(cleanDigits)) {
+                        return 'Az adóazonosító jel ellenőrző száma hibás.';
+                    }
+                }
+
                 if (rule === 'taj_number' && !isEmpty(input)) {
                     if (cleanDigits.length !== 9) {
                         return 'A TAJ számnak pontosan 9 számjegyből kell állnia.';

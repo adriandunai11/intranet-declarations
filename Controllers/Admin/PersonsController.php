@@ -4,7 +4,6 @@ namespace App\Modules\Declarations\Controllers\Admin;
 
 use App\Controllers\AdminBaseController;
 use App\Modules\Declarations\Models\PersonModel;
-use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Presenters\PersonTablePresenter;
 use App\Modules\Declarations\Services\DeclarationPacketService;
 use App\Modules\Declarations\Services\EmploymentRelationService;
@@ -24,7 +23,6 @@ class PersonsController extends AdminBaseController
     protected DeclarationPacketService $declarationPacketService;
     protected PersonTablePresenter $personTablePresenter;
     protected RecruiterService $recruiterService;
-    protected DeclarationAuditLogModel $auditLogModel;
 
     public function __construct()
     {
@@ -33,7 +31,6 @@ class PersonsController extends AdminBaseController
         $this->declarationPacketService = new DeclarationPacketService();
         $this->personTablePresenter = new PersonTablePresenter();
         $this->recruiterService = new RecruiterService();
-        $this->auditLogModel = new DeclarationAuditLogModel();
     }
 
     public function index()
@@ -72,7 +69,7 @@ class PersonsController extends AdminBaseController
         }
 
         $rules = [
-            'antra_id' => 'required|trim|min_length[2]|max_length[50]|is_unique[declaration_persons.antra_id]',
+            'antra_id' => 'required|trim|max_length[50]|is_unique[declaration_persons.antra_id]',
             'lastname' => 'required|trim|min_length[2]|max_length[100]',
             'firstname' => 'required|trim|min_length[2]|max_length[100]',
             'email' => 'required|trim|valid_email|max_length[190]|is_unique[declaration_persons.email]',
@@ -140,7 +137,7 @@ class PersonsController extends AdminBaseController
         postAllowed();
 
         $rules = [
-            'antra_id' => 'permit_empty|trim|min_length[2]|max_length[50]',
+            'antra_id' => 'permit_empty|trim|max_length[50]',
             'lastname' => 'required|trim|min_length[2]|max_length[100]',
             'firstname' => 'required|trim|min_length[2]|max_length[100]',
             'email' => 'permit_empty|trim|valid_email|max_length[190]',
@@ -355,7 +352,6 @@ class PersonsController extends AdminBaseController
             'sentPacketRelationIds' => $sentPacketRelationIds,
             'sentPacketCompanyYearKeys' => $sentPacketCompanyYearKeys,
             'draftPacketsByRelationId' => $draftPacketsByRelationId,
-            'auditLogs' => $this->auditLogModel->findByPersonId($id, 50),
         ]);
     }
 
