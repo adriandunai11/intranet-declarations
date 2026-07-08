@@ -53,4 +53,5 @@ $routes->group('my-declarations', [
     'namespace' => 'App\Modules\Declarations\Controllers\Employee',
 ], static function (RouteCollection $routes): void {
     $routes->get('/', 'MyDeclarationsController::index');
+    $routes->post('start', 'MyDeclarationsController::start');
 });
