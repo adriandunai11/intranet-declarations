@@ -343,25 +343,18 @@
                                                             class="btn btn-outline-info btn-sm mr-2 mb-2"
                                                             target="_blank"
                                                             rel="noopener">
-                                                            <i class="fas fa-eye pr-1"></i> Előnézet
+                                                            <i class="fas fa-eye pr-1"></i> PDF előnézet
                                                         </a>
-
-                                                        <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/generate/docx', ['class' => 'mr-2 mb-2']) ?>
-                                                        <?= csrf_field() ?>
-                                                        <button type="submit" class="btn btn-outline-primary btn-sm">
-                                                            <i class="fas fa-file-word pr-1"></i> DOCX generálás
-                                                        </button>
-                                                        <?= form_close() ?>
 
                                                         <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/generate/pdf', ['class' => 'mr-2 mb-2']) ?>
                                                         <?= csrf_field() ?>
                                                         <button type="submit" class="btn btn-outline-secondary btn-sm">
-                                                            <i class="fas fa-file-pdf pr-1"></i> PDF generálás
+                                                            <i class="fas fa-file-pdf pr-1"></i> PDF letöltés
                                                         </button>
                                                         <?= form_close() ?>
                                                     </div>
                                                     <div class="text-muted small">
-                                                        Sablon fájl: <code><?= esc($item->template_file ?: ($item->current_template_file ?? '-')) ?></code>
+                                                        A PDF a beküldött online űrlapadatokból készül, DOCX sablon nélkül.
                                                     </div>
                                                 <?php endif; ?>
                                             <?php endif; ?>
@@ -389,122 +382,39 @@
                         'revoked' => ['Visszavonva', 'danger'],
                         'cancelled' => ['Törölve', 'danger'],
                     ];
-                    $latestInvitation = $latestInvitation ?? null;
-                    [$invitationStatusLabel, $invitationStatusClass] = $latestInvitation
-                        ? ($invitationStatusLabels[$latestInvitation->status] ?? [$latestInvitation->status ?: '-', 'secondary'])
-                        : ['Még nincs meghívó', 'secondary'];
+                    [$invitationLabel, $invitationClass] = $invitationStatusLabels[$activeInvitation->status ?? $latestInvitation->status ?? ''] ?? ['Nincs aktív meghívó', 'secondary'];
                     ?>
 
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <strong>Utolsó meghívó állapota</strong>
-                            <p class="mb-2">
-                                <span class="badge badge-<?= esc($invitationStatusClass) ?>"><?= esc($invitationStatusLabel) ?></span>
-                            </p>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>E-mail cím</strong>
-                            <p class="text-muted mb-2"><?= esc($latestInvitation->email ?? ($person->email ?? '-')) ?></p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Kiküldve</strong>
-                            <p class="text-muted mb-2"><?= esc($latestInvitation->sent_at ?? '-') ?></p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Megnyitva</strong>
-                            <p class="text-muted mb-2"><?= esc($latestInvitation->opened_at ?? '-') ?></p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Lejár</strong>
-                            <p class="text-muted mb-2"><?= esc($latestInvitation->expires_at ?? '-') ?></p>
-                        </div>
-                        <div class="col-md-3">
-                            <strong>Visszavonva</strong>
-                            <p class="text-muted mb-2"><?= esc($latestInvitation->revoked_at ?? '-') ?></p>
-                        </div>
-                    </div>
-
-                    <p class="text-muted mb-3">
-                        A meghívó linket külön művelettel lehet létrehozni és kiküldeni.
-                        Új link generálásakor a korábbi aktív linkek érvényüket vesztik.
+                    <p>
+                        <span class="badge badge-<?= esc($invitationClass) ?>"><?= esc($invitationLabel) ?></span>
                     </p>
 
-                    <?php if (hasPermissions('declarations_invitations_regenerate')): ?>
-                        <button type="button" class="btn btn-warning mb-2" data-toggle="modal"
-                            data-target="#sendNewInvitationLinkModal">
-                            <i class="fas fa-paper-plane pr-1"></i>
-                            <?= $latestInvitation ? 'Új meghívó link generálása és kiküldése' : 'Meghívó link generálása és kiküldése' ?>
-                        </button>
+                    <?php if ($latestInvitation): ?>
+                        <dl class="row">
+                            <dt class="col-sm-4">E-mail</dt>
+                            <dd class="col-sm-8"><?= esc($latestInvitation->email ?: '-') ?></dd>
+
+                            <dt class="col-sm-4">Kiküldve</dt>
+                            <dd class="col-sm-8"><?= esc($latestInvitation->sent_at ?: '-') ?></dd>
+
+                            <dt class="col-sm-4">Megnyitva</dt>
+                            <dd class="col-sm-8"><?= esc($latestInvitation->opened_at ?: '-') ?></dd>
+
+                            <dt class="col-sm-4">Lejárat</dt>
+                            <dd class="col-sm-8"><?= esc($latestInvitation->expires_at ?: '-') ?></dd>
+                        </dl>
+                    <?php else: ?>
+                        <p class="text-muted">Még nincs létrehozott meghívó link ehhez a csomaghoz.</p>
                     <?php endif; ?>
 
-                    <div class="text-muted small mt-2">
-                        A meghívó link 14 napig érvényes. Ha több dokumentumot nyit újra, előbb nyissa újra mindet, majd egyszer küldjön új linket.
-                    </div>
-                </div>
-            </div>
-
-            <?php if (hasPermissions('declarations_invitations_regenerate')): ?>
-                <div class="modal fade" id="sendNewInvitationLinkModal" tabindex="-1" role="dialog"
-                    aria-labelledby="sendNewInvitationLinkModalLabel" aria-hidden="true">
-                    <div class="modal-dialog" role="document">
-                        <div class="modal-content">
-                            <?= form_open('declarations/packets/' . $packet->id . '/invitation/send-new-link') ?>
-                            <?= csrf_field() ?>
-
-                            <div class="modal-header">
-                                <h5 class="modal-title" id="sendNewInvitationLinkModalLabel">
-                                    Új meghívó link küldése
-                                </h5>
-                                <button type="button" class="close" data-dismiss="modal" aria-label="Bezárás">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-
-                            <div class="modal-body">
-                                <p>
-                                    Biztosan meghívó linket szeretne generálni és kiküldeni a kitöltőnek?
-                                </p>
-
-                                <div class="alert alert-warning mb-0">
-                                    <?php if ($latestInvitation): ?>
-                                        A korábbi aktív linkek érvénytelenítésre kerülnek.
-                                        Ezt akkor használja, ha a kitöltő nem találja a korábbi e-mailt,
-                                        vagy új hozzáférést szeretne biztosítani.
-                                    <?php else: ?>
-                                        A rendszer létrehozza és e-mailben kiküldi az első dokumentumkitöltő linket.
-                                    <?php endif; ?>
-                                </div>
-                            </div>
-
-                            <div class="modal-footer">
-                                <button type="submit" class="btn btn-warning">
-                                    Generálás és küldés
-                                </button>
-
-                                <button type="button" class="btn btn-default" data-dismiss="modal">
-                                    Mégsem
-                                </button>
-                            </div>
-
-                            <?= form_close() ?>
-                        </div>
-                    </div>
-                </div>
-            <?php endif; ?>
-
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h3 class="card-title mb-0">Nyilatkozatcsomag előzmények</h3>
-                </div>
-
-                <div class="card-body">
-                    <p class="text-muted">
-                        A csomaghoz, nyilatkozatokhoz, meghívókhoz és ellenőrzésekhez tartozó események külön oldalon, nagyobb nézetben érhetők el.
-                    </p>
-
-                    <a href="<?= url('declarations/packets/' . (int) $packet->id . '/audit') ?>" class="btn btn-default">
-                        <i class="fas fa-history pr-1"></i> Előzmények megnyitása
-                    </a>
+                    <?php if (hasPermissions('declarations_invitations_regenerate')): ?>
+                        <?= form_open('declarations/packets/' . $packet->id . '/invitation/send-new-link') ?>
+                        <?= csrf_field() ?>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fas fa-envelope pr-1"></i> Új link küldése
+                        </button>
+                        <?= form_close() ?>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -516,17 +426,15 @@
         <?php
         $item = $reviewItem['item'];
         $submission = $reviewItem['submission'];
-        $canReview = (bool) ($reviewItem['can_review'] ?? false);
         ?>
 
-        <?php if ($submission && $item->status === 'completed' && $canReview): ?>
-            <div class="modal fade" id="rejectItemModal<?= (int) $item->id ?>" role="dialog" data-backdrop="static"
+        <?php if ($submission && ($reviewItem['can_review'] ?? false)): ?>
+            <div class="modal fade" id="rejectItemModal<?= (int) $item->id ?>" tabindex="-1" role="dialog"
                 aria-labelledby="rejectItemModalLabel<?= (int) $item->id ?>" aria-hidden="true">
                 <div class="modal-dialog" role="document">
                     <div class="modal-content">
                         <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/reject') ?>
                         <?= csrf_field() ?>
-
                         <div class="modal-header">
                             <h5 class="modal-title" id="rejectItemModalLabel<?= (int) $item->id ?>">
                                 Nyilatkozat elutasítása
@@ -535,40 +443,53 @@
                                 <span aria-hidden="true">&times;</span>
                             </button>
                         </div>
-
                         <div class="modal-body">
-                            <p>
-                                Biztosan elutasítod ezt a nyilatkozatot?
-                            </p>
-
                             <p class="text-muted">
-                                <?= esc($item->template_name ?: '-') ?>
+                                Add meg, mit kell javítani. Az üzenetet a kitöltő megkapja.
                             </p>
-
                             <div class="form-group">
-                                <label for="review_note_<?= (int) $item->id ?>" class="required">
-                                    Javítás oka / megjegyzés
-                                </label>
-                                <textarea name="review_note" id="review_note_<?= (int) $item->id ?>" class="form-control" rows="4"
-                                    required></textarea>
-                            </div>
-
-                            <div class="alert alert-warning mb-0">
-                                Elutasítás után a kitöltő újra szerkesztheti ezt a nyilatkozatot.
-                                Az értesítési esemény rögzítésre kerül.
+                                <label for="review_note_<?= (int) $item->id ?>">Javítás oka</label>
+                                <textarea name="review_note" id="review_note_<?= (int) $item->id ?>" class="form-control" rows="4" required></textarea>
                             </div>
                         </div>
-
                         <div class="modal-footer">
-                            <button type="submit" class="btn btn-danger">
-                                <i class="fas fa-times pr-1"></i> Elutasítás
-                            </button>
+                            <button type="button" class="btn btn-default" data-dismiss="modal">Mégsem</button>
+                            <button type="submit" class="btn btn-danger">Elutasítás és értesítés</button>
+                        </div>
+                        <?= form_close() ?>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
 
-                            <button type="button" class="btn btn-default" data-dismiss="modal">
-                                Mégsem
+        <?php if ($submission && hasPermissions('declarations_admin_override')): ?>
+            <div class="modal fade" id="reopenItemForCorrectionModal<?= (int) $item->id ?>" tabindex="-1" role="dialog"
+                aria-labelledby="reopenItemForCorrectionModalLabel<?= (int) $item->id ?>" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/reopen-for-correction') ?>
+                        <?= csrf_field() ?>
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="reopenItemForCorrectionModalLabel<?= (int) $item->id ?>">
+                                Nyilatkozat újranyitása javításra
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Bezárás">
+                                <span aria-hidden="true">&times;</span>
                             </button>
                         </div>
-
+                        <div class="modal-body">
+                            <p class="text-muted">
+                                Ez az elem újra kitölthető lesz a meghívó linken. Az elfogadás/elutasítás adatai törlődnek.
+                            </p>
+                            <div class="form-group">
+                                <label for="reopen_review_note_<?= (int) $item->id ?>">Megjegyzés a javításhoz</label>
+                                <textarea name="review_note" id="reopen_review_note_<?= (int) $item->id ?>" class="form-control" rows="4"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">Mégsem</button>
+                            <button type="submit" class="btn btn-warning">Újranyitás</button>
+                        </div>
                         <?= form_close() ?>
                     </div>
                 </div>
@@ -578,130 +499,41 @@
 <?php endif; ?>
 
 <?php if (!empty($batchRejectItems ?? [])): ?>
-    <div class="modal fade" id="batchRejectItemsModal" role="dialog" data-backdrop="static"
-        aria-labelledby="batchRejectItemsModalLabel" aria-hidden="true">
+    <div class="modal fade" id="batchRejectItemsModal" tabindex="-1" role="dialog" aria-labelledby="batchRejectItemsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg" role="document">
             <div class="modal-content">
                 <?= form_open('declarations/packets/' . $packet->id . '/items/reject-batch') ?>
                 <?= csrf_field() ?>
-
                 <div class="modal-header">
-                    <h5 class="modal-title" id="batchRejectItemsModalLabel">
-                        Több nyilatkozat elutasítása
-                    </h5>
+                    <h5 class="modal-title" id="batchRejectItemsModalLabel">Több nyilatkozat elutasítása</h5>
                     <button type="button" class="close" data-dismiss="modal" aria-label="Bezárás">
                         <span aria-hidden="true">&times;</span>
                     </button>
                 </div>
-
                 <div class="modal-body">
-                    <div class="alert alert-info">
-                        A kijelölt dokumentumok egy művelettel kerülnek vissza javításra, és a kitöltő egy összesítő e-mailt kap.
-                    </div>
+                    <p class="text-muted">Jelöld ki a javítandó nyilatkozatokat, és írd be külön-külön a javítás okát.</p>
 
-                    <?php foreach ($batchRejectItems as $batchRejectItem): ?>
-                        <?php $item = $batchRejectItem['item']; ?>
+                    <?php foreach ($batchRejectItems as $reviewItem): ?>
+                        <?php $item = $reviewItem['item']; ?>
                         <div class="border rounded p-3 mb-3">
                             <div class="custom-control custom-checkbox mb-2">
-                                <input type="checkbox" class="custom-control-input"
-                                    id="batch_reject_item_<?= (int) $item->id ?>"
-                                    name="item_ids[]"
-                                    value="<?= (int) $item->id ?>">
+                                <input type="checkbox" class="custom-control-input" name="item_ids[]" value="<?= (int) $item->id ?>" id="batch_reject_item_<?= (int) $item->id ?>">
                                 <label class="custom-control-label" for="batch_reject_item_<?= (int) $item->id ?>">
-                                    <strong><?= esc($item->template_name ?: '-') ?></strong>
+                                    <?= esc($item->template_name ?: ('Nyilatkozat #' . $item->id)) ?>
                                 </label>
                             </div>
-
-                            <label for="batch_review_note_<?= (int) $item->id ?>">
-                                Javítás oka / megjegyzés
-                            </label>
-                            <textarea name="review_notes[<?= (int) $item->id ?>]"
-                                id="batch_review_note_<?= (int) $item->id ?>"
-                                class="form-control"
-                                rows="3"
-                                placeholder="Csak akkor kötelező, ha ezt a nyilatkozatot kijelöli."></textarea>
+                            <textarea name="review_notes[<?= (int) $item->id ?>]" class="form-control" rows="3" placeholder="Javítás oka"></textarea>
                         </div>
                     <?php endforeach; ?>
                 </div>
-
                 <div class="modal-footer">
-                    <button type="submit" class="btn btn-danger">
-                        <i class="fas fa-times-circle pr-1"></i> Kijelöltek elutasítása
-                    </button>
-
-                    <button type="button" class="btn btn-default" data-dismiss="modal">
-                        Mégsem
-                    </button>
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Mégsem</button>
+                    <button type="submit" class="btn btn-danger">Kijelöltek elutasítása</button>
                 </div>
-
                 <?= form_close() ?>
             </div>
         </div>
     </div>
-<?php endif; ?>
-
-<?php if (!empty($reviewItems) && hasPermissions('declarations_admin_override')): ?>
-    <?php foreach ($reviewItems as $reviewItem): ?>
-        <?php
-        $item = $reviewItem['item'];
-        $submission = $reviewItem['submission'];
-        ?>
-
-        <?php if ($submission && in_array((string) $item->status, ['completed', 'accepted', 'rejected'], true)): ?>
-            <div class="modal fade" id="reopenItemForCorrectionModal<?= (int) $item->id ?>" tabindex="-1" role="dialog"
-                aria-labelledby="reopenItemForCorrectionModalLabel<?= (int) $item->id ?>" aria-hidden="true">
-                <div class="modal-dialog" role="document">
-                    <div class="modal-content">
-                        <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/reopen-for-correction') ?>
-                        <?= csrf_field() ?>
-
-                        <div class="modal-header">
-                            <h5 class="modal-title" id="reopenItemForCorrectionModalLabel<?= (int) $item->id ?>">
-                                Nyilatkozat újranyitása javításra
-                            </h5>
-                            <button type="button" class="close" data-dismiss="modal" aria-label="Bezárás">
-                                <span aria-hidden="true">&times;</span>
-                            </button>
-                        </div>
-
-                        <div class="modal-body">
-                            <p>
-                                Ezzel a művelettel a dokumentum újra javíthatóvá válik a kitöltő számára.
-                            </p>
-
-                            <p class="text-muted">
-                                <?= esc($item->template_name ?: '-') ?>
-                            </p>
-
-                            <div class="alert alert-warning">
-                                A dokumentum javításra újranyílik. E-mail vagy új meghívó link nem megy ki automatikusan; azt külön, a csomag szintű gombbal lehet kiküldeni.
-                            </div>
-
-                            <div class="form-group">
-                                <label for="reopen_review_note_<?= (int) $item->id ?>" class="required">
-                                    Javítás oka / admin megjegyzés
-                                </label>
-                                <textarea name="review_note" id="reopen_review_note_<?= (int) $item->id ?>" class="form-control"
-                                    rows="4" required></textarea>
-                            </div>
-                        </div>
-
-                        <div class="modal-footer">
-                            <button type="submit" class="btn btn-warning">
-                                Újranyitás javításra
-                            </button>
-
-                            <button type="button" class="btn btn-default" data-dismiss="modal">
-                                Mégsem
-                            </button>
-                        </div>
-
-                        <?= form_close() ?>
-                    </div>
-                </div>
-            </div>
-        <?php endif; ?>
-    <?php endforeach; ?>
 <?php endif; ?>
 
 <?= $this->endSection() ?>
