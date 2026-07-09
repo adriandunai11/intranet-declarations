@@ -21,15 +21,12 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
             </div>
         <?php endif; ?>
 
-        <div class="helper-card">
-            <div class="helper-title">Sablon</div>
-            <p>
-                <?= esc($templateFile ?? '-') ?><br>
-                <?php if (!empty($item->template_version)): ?>
-                    Verzió: <?= esc($item->template_version) ?>
-                <?php endif; ?>
-            </p>
-        </div>
+        <?php if (!empty($item->template_version)): ?>
+            <div class="helper-card">
+                <div class="helper-title">Verzió</div>
+                <p><?= esc($item->template_version) ?></p>
+            </div>
+        <?php endif; ?>
     </aside>
 
     <main class="submitted-main">

@@ -101,6 +101,7 @@ class DeclarationAuditLogModel extends Model
         ];
 
         foreach ([
+            'actor_user_id',
             'actor_type',
             'actor_label',
             'person_id',
@@ -137,6 +138,7 @@ class DeclarationAuditLogModel extends Model
                 ->whereIn('entity_type', ['person', 'declaration_person'])
                 ->where('entity_id', $personId)
             ->groupEnd()
+            ->orWhere('person_id', $personId)
             ->orGroupStart()
                 ->whereIn('entity_type', ['employment_relation', 'declaration_employment_relation'])
                 ->where('person_id', $personId)

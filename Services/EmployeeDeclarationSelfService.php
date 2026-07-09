@@ -53,7 +53,7 @@ class EmployeeDeclarationSelfService
     {
         $person = $this->personForUser($userId);
         $relations = $this->openRelationsForPerson((int) $person->id, $userId);
-        $defaultTaxYear = (int) date('Y') + 1;
+        $defaultTaxYear = $this->defaultTaxYear();
 
         return [
             'person' => $person,
@@ -84,6 +84,10 @@ class EmployeeDeclarationSelfService
 
         if ($candidateEmail === '') {
             throw new RuntimeException('A személyhez nincs e-mail cím rögzítve, ezért nem küldhető ki kitöltési link.');
+        }
+
+        if (trim((string) ($person->antra_id ?? '')) === '') {
+            throw new RuntimeException('A személyhez nincs Antra azonosító rögzítve, ezért nem indítható azonosított kitöltési link.');
         }
 
         $plainToken = $this->tokenService->generatePlainToken();
@@ -217,9 +221,8 @@ class EmployeeDeclarationSelfService
      */
     private function openRelationsForPerson(int $personId, int $userId): array
     {
-        return $this->relationModel
+        $relations = $this->relationModel
             ->where('person_id', $personId)
-            ->where('intranet_user_id', $userId)
             ->whereNotIn('status', [
                 EmploymentRelation::STATUS_CLOSED,
                 EmploymentRelation::STATUS_CANCELLED,
@@ -227,15 +230,22 @@ class EmployeeDeclarationSelfService
             ->orderBy('start_date', 'DESC')
             ->orderBy('id', 'DESC')
             ->findAll();
+
+        return array_values(array_filter($relations, static function ($relation) use ($userId): bool {
+            $relationUserId = (int) ($relation->intranet_user_id ?? 0);
+
+            return $relationUserId === 0 || $relationUserId === $userId;
+        }));
     }
 
     private function relationForUser(int $relationId, int $personId, int $userId): object
     {
         $relation = $this->relationModel->find($relationId);
+        $relationUserId = $relation ? (int) ($relation->intranet_user_id ?? 0) : 0;
 
         if (!$relation
             || (int) $relation->person_id !== $personId
-            || (int) ($relation->intranet_user_id ?? 0) !== $userId
+            || ($relationUserId > 0 && $relationUserId !== $userId)
             || !$relation->isOpen()
         ) {
             throw new RuntimeException('A kiválasztott jogviszony nem használható saját nyilatkozat indításához.');
@@ -311,6 +321,21 @@ class EmployeeDeclarationSelfService
                 . ($row->template_name ?: ('#' . $row->packet_id))
             );
         }
+    }
+
+    private function defaultTaxYear(): int
+    {
+        $currentYear = (int) date('Y');
+
+        foreach ([$currentYear, $currentYear + 1] as $taxYear) {
+            foreach ($this->templateModel->findCandidateSelectableTaxTemplates($taxYear) as $template) {
+                if ($this->formRegistry->hasConcreteHandlerForTemplate($template)) {
+                    return $taxYear;
+                }
+            }
+        }
+
+        return $currentYear;
     }
 
     private function normalizeTaxYear(int $taxYear): int

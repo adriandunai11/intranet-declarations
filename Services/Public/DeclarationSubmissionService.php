@@ -235,6 +235,10 @@ class DeclarationSubmissionService
             throw new FormValidationException([$e->getMessage()]);
         }
 
+        $submissionDataJson = $this->encodeSubmissionData($data);
+        $submissionHash = hash('sha256', $submissionDataJson);
+        $submissionEvidence = $this->submissionEvidence($context, $request, $submissionHash);
+
         $db = db_connect();
         $db->transBegin();
 
@@ -257,7 +261,7 @@ class DeclarationSubmissionService
                 DeclarationPacketItem::STATUS_REJECTED,
                 DeclarationPacketItem::STATUS_COMPLETED,
             ], true)) {
-                if (!$this->submissionModel->markAsSubmittedAgain((int) $existingSubmission->id, $data)) {
+                if (!$this->submissionModel->markAsSubmittedAgain((int) $existingSubmission->id, $submissionDataJson, $submissionEvidence)) {
                     $errors = $this->submissionModel->errors();
 
                     throw new \RuntimeException(
@@ -272,9 +276,9 @@ class DeclarationSubmissionService
                     'person_id' => (int) $context->packet->person_id,
                     'employment_relation_id' => (int) $context->packet->employment_relation_id,
                     'status' => DeclarationSubmission::STATUS_SUBMITTED,
-                    'data_json' => json_encode($data, JSON_UNESCAPED_UNICODE),
+                    'data_json' => $submissionDataJson,
                     'submitted_at' => date('Y-m-d H:i:s'),
-                ], true);
+                ] + $submissionEvidence, true);
 
                 if (!$submissionId) {
                     $errors = $this->submissionModel->errors();
@@ -298,14 +302,17 @@ class DeclarationSubmissionService
                     null,
                     'A beálló személyes adatai frissültek a beküldött nyilatkozat alapján.',
                     [
-                        'actor_type' => 'candidate',
-                        'actor_label' => $context->invitation->email ?? null,
+                        'actor_type' => $submissionEvidence['submitter_type'] ?? 'candidate',
+                        'actor_user_id' => $submissionEvidence['submitter_user_id'] ?? null,
+                        'actor_label' => $submissionEvidence['submitter_label'] ?? ($context->invitation->email ?? null),
                         'person_id' => (int) $context->packet->person_id,
                         'employment_relation_id' => (int) $context->packet->employment_relation_id,
                         'submission_id' => $submissionId,
                         'template_id' => (int) $item->template_id,
                         'template_code' => $item->template_code ?? null,
                         'updated_fields' => array_keys($data),
+                        'submission_hash' => $submissionHash,
+                        'hash_algorithm' => 'sha256',
                     ]
                 );
             }
@@ -320,8 +327,9 @@ class DeclarationSubmissionService
                 DeclarationPacketItem::STATUS_COMPLETED,
                 $wasResubmission ? 'A beálló javítás után újra beküldte a dokumentumot.' : 'A beálló beküldte a dokumentumot.',
                 [
-                    'actor_type' => 'candidate',
-                    'actor_label' => $context->invitation->email ?? null,
+                    'actor_type' => $submissionEvidence['submitter_type'] ?? 'candidate',
+                    'actor_user_id' => $submissionEvidence['submitter_user_id'] ?? null,
+                    'actor_label' => $submissionEvidence['submitter_label'] ?? ($context->invitation->email ?? null),
                     'person_id' => (int) $context->packet->person_id,
                     'employment_relation_id' => (int) $context->packet->employment_relation_id,
                     'submission_id' => $submissionId,
@@ -330,6 +338,10 @@ class DeclarationSubmissionService
                     'template_id' => (int) $item->template_id,
                     'template_code' => $item->template_code ?? null,
                     'template_name' => $item->template_name ?? null,
+                    'submitter_email' => $submissionEvidence['submitter_email'] ?? null,
+                    'submitter_user_id' => $submissionEvidence['submitter_user_id'] ?? null,
+                    'submission_hash' => $submissionHash,
+                    'hash_algorithm' => 'sha256',
                 ]
             );
 
@@ -344,6 +356,74 @@ class DeclarationSubmissionService
             $db->transRollback();
             throw $e;
         }
+    }
+
+    private function encodeSubmissionData(array $data): string
+    {
+        $json = json_encode(
+            $this->sortForStableHash($data),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
+
+        if ($json === false) {
+            throw new \RuntimeException('A nyilatkozat adatai nem kódolhatók mentéshez.');
+        }
+
+        return $json;
+    }
+
+    private function sortForStableHash($value)
+    {
+        if (!is_array($value)) {
+            return $value;
+        }
+
+        if ($this->isListArray($value)) {
+            return array_map(fn($item) => $this->sortForStableHash($item), $value);
+        }
+
+        ksort($value);
+
+        foreach ($value as $key => $item) {
+            $value[$key] = $this->sortForStableHash($item);
+        }
+
+        return $value;
+    }
+
+    private function isListArray(array $value): bool
+    {
+        return $value === [] || array_keys($value) === range(0, count($value) - 1);
+    }
+
+    private function submissionEvidence(InvitationContext $context, IncomingRequest $request, string $submissionHash): array
+    {
+        $submitterType = 'candidate';
+        $submitterUserId = null;
+        $email = trim((string) ($context->invitation->email ?? ''));
+        $label = $email !== '' ? $email : 'Kitöltő';
+
+        if (
+            $context->person
+            && !empty($context->person->intranet_user_id)
+            && (int) ($context->packet->created_by_user_id ?? 0) === (int) $context->person->intranet_user_id
+        ) {
+            $submitterType = 'employee';
+            $submitterUserId = (int) $context->person->intranet_user_id;
+            $personName = method_exists($context->person, 'fullName') ? $context->person->fullName() : '';
+            $label = trim($personName . ($email !== '' ? ' (' . $email . ')' : '')) ?: $label;
+        }
+
+        return [
+            'submitter_type' => $submitterType,
+            'submitter_user_id' => $submitterUserId,
+            'submitter_label' => $label,
+            'submitter_email' => $email !== '' ? $email : null,
+            'submitter_ip_address' => $request->getIPAddress(),
+            'submitter_user_agent' => substr((string) $request->getUserAgent(), 0, 255),
+            'submission_hash' => $submissionHash,
+            'hash_algorithm' => 'sha256',
+        ];
     }
 
     private function isItemCompletedForFinalize(object $item): bool

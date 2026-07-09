@@ -5,8 +5,11 @@ $person = $person ?? null;
 $relations = $relations ?? [];
 $templates = $templates ?? [];
 $packets = $packets ?? [];
-$defaultTaxYear = (int) ($defaultTaxYear ?? ((int) date('Y') + 1));
+$defaultTaxYear = (int) ($defaultTaxYear ?? (int) date('Y'));
 $pageError = $pageError ?? null;
+$oldTemplateIds = array_map('intval', (array) old('template_ids', []));
+$oldRelationId = (string) old('relation_id', '');
+$oldTaxYear = old('tax_year', $defaultTaxYear);
 
 $templatesByGroup = [];
 foreach ($templates as $template) {
@@ -79,7 +82,7 @@ $groupLabels = [
                                     <label for="relation_id">Jogviszony</label>
                                     <select name="relation_id" id="relation_id" class="form-control" required>
                                         <?php foreach ($relations as $relation): ?>
-                                            <option value="<?= (int) $relation->id ?>">
+                                            <option value="<?= (int) $relation->id ?>" <?= $oldRelationId === (string) $relation->id ? 'selected' : '' ?>>
                                                 #<?= (int) $relation->id ?> · <?= esc($relation->location ?: 'Jogviszony') ?>
                                                 <?php if (!empty($relation->start_date)): ?> · <?= esc($relation->start_date) ?><?php endif; ?>
                                             </option>
@@ -89,7 +92,7 @@ $groupLabels = [
 
                                 <div class="form-group">
                                     <label for="tax_year">Adóév</label>
-                                    <input type="number" name="tax_year" id="tax_year" class="form-control" min="2020" max="<?= (int) date('Y') + 2 ?>" value="<?= esc(old('tax_year') ?: $defaultTaxYear) ?>" required>
+                                    <input type="number" name="tax_year" id="tax_year" class="form-control" min="2020" max="<?= (int) date('Y') + 2 ?>" value="<?= esc($oldTaxYear ?: $defaultTaxYear) ?>" required>
                                 </div>
 
                                 <div class="form-group">
@@ -100,7 +103,7 @@ $groupLabels = [
                                             <div class="mt-2">
                                                 <?php foreach ($groupTemplates as $template): ?>
                                                     <div class="custom-control custom-checkbox mb-2">
-                                                        <input type="checkbox" class="custom-control-input" name="template_ids[]" value="<?= (int) $template->id ?>" id="template_<?= (int) $template->id ?>">
+                                                        <input type="checkbox" class="custom-control-input" name="template_ids[]" value="<?= (int) $template->id ?>" id="template_<?= (int) $template->id ?>" <?= in_array((int) $template->id, $oldTemplateIds, true) ? 'checked' : '' ?>>
                                                         <label class="custom-control-label" for="template_<?= (int) $template->id ?>">
                                                             <?= esc(method_exists($template, 'displayName') ? $template->displayName() : ($template->name ?? 'Nyilatkozat')) ?>
                                                             <?php if (!empty($template->description)): ?>

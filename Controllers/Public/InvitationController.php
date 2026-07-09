@@ -368,10 +368,6 @@ class InvitationController extends BaseController
             'submission' => $submission,
             'startUrl' => $this->urlService->start($context->token),
             'itemUrl' => $this->urlService->item($context->token, (int) $item->id),
-            'templateFields' => method_exists($handler, 'editableFields') ? $handler->editableFields() : [],
-            'templateHasPlaceholders' => method_exists($handler, 'hasTemplatePlaceholders') ? $handler->hasTemplatePlaceholders() : false,
-            'templateCanInspect' => method_exists($handler, 'canInspectTemplate') ? $handler->canInspectTemplate() : true,
-            'templateFileAvailable' => method_exists($handler, 'templateFileAvailable') ? $handler->templateFileAvailable() : false,
         ];
 
         if (method_exists($handler, 'viewData')) {

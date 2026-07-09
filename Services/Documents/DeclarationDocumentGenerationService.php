@@ -20,9 +20,7 @@ class DeclarationDocumentGenerationService
     protected EmploymentRelationModel $relationModel;
     protected BasicdataModel $basicdataModel;
     protected DeclarationAuditLogModel $auditLogModel;
-    protected DeclarationDocumentGenerator $generator;
     protected DeclarationDocumentPlaceholderService $placeholderService;
-    protected DeclarationTemplateFileResolver $templateFileResolver;
     protected DeclarationSubmissionPdfGenerator $submissionPdfGenerator;
 
     public function __construct()
@@ -34,9 +32,7 @@ class DeclarationDocumentGenerationService
         $this->relationModel = new EmploymentRelationModel();
         $this->basicdataModel = new BasicdataModel();
         $this->auditLogModel = new DeclarationAuditLogModel();
-        $this->generator = new DeclarationDocumentGenerator();
         $this->placeholderService = new DeclarationDocumentPlaceholderService();
-        $this->templateFileResolver = new DeclarationTemplateFileResolver();
         $this->submissionPdfGenerator = new DeclarationSubmissionPdfGenerator();
     }
 
@@ -44,8 +40,8 @@ class DeclarationDocumentGenerationService
     {
         $format = strtolower(trim($format));
 
-        if (!in_array($format, ['docx', 'pdf'], true)) {
-            throw new RuntimeException('Csak DOCX vagy PDF dokumentum generálható.');
+        if ($format !== 'pdf') {
+            throw new RuntimeException('Csak PDF dokumentum generálható.');
         }
 
         $packet = $this->packetModel->find($packetId);
@@ -67,27 +63,16 @@ class DeclarationDocumentGenerationService
             throw new RuntimeException('A nyilatkozat sablonkódja hiányzik.');
         }
 
-        $templatePath = $this->templateFileResolver->resolveForItem($item);
-
         $person = $this->personModel->find((int) $packet->person_id);
         $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = !empty($packet->company_id)
             ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
             : null;
 
-        $placeholders = $this->placeholderService->build($packet, $item, $submission, $person, $relation, $company);
         $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company);
         $outputPath = $this->outputPath((int) $packet->id, (int) $item->id, $templateCode, $format);
 
-        if ($format === 'pdf') {
-            $this->submissionPdfGenerator->generate($documentSummary, $outputPath);
-        } else {
-            if ($templatePath === null) {
-                throw new RuntimeException('A DOCX sablon nem található ehhez a nyilatkozathoz.');
-            }
-
-            $this->generator->generateDocx($templatePath, $placeholders, $outputPath, $documentSummary);
-        }
+        $this->submissionPdfGenerator->generate($documentSummary, $outputPath);
 
         $this->auditLogModel->logAction(
             DeclarationAuditLogModel::ACTION_DOCUMENT_GENERATED,
@@ -104,8 +89,6 @@ class DeclarationDocumentGenerationService
                 'submission_id' => (int) $submission->id,
                 'template_code' => $templateCode,
                 'template_version' => $item->template_version ?? null,
-                'template_file' => $item->template_file ?? null,
-                'resolved_template_path' => $format === 'docx' ? $templatePath : null,
                 'format' => $format,
                 'output_path' => $outputPath,
             ]

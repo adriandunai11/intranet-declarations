@@ -22,7 +22,15 @@ class DeclarationSubmissionModel extends Model
         'person_id',
         'employment_relation_id',
         'status',
+        'submitter_type',
+        'submitter_user_id',
+        'submitter_label',
+        'submitter_email',
+        'submitter_ip_address',
+        'submitter_user_agent',
         'data_json',
+        'submission_hash',
+        'hash_algorithm',
         'submitted_at',
         'accepted_at',
         'rejected_at',
@@ -75,14 +83,14 @@ class DeclarationSubmissionModel extends Model
         ]);
     }
 
-    public function markAsSubmittedAgain(int $submissionId, array $data): bool
+    public function markAsSubmittedAgain(int $submissionId, string $dataJson, array $evidence = []): bool
     {
-        return $this->update($submissionId, [
+        return $this->update($submissionId, array_merge([
             'status' => DeclarationSubmission::STATUS_SUBMITTED,
-            'data_json' => json_encode($data, JSON_UNESCAPED_UNICODE),
+            'data_json' => $dataJson,
             'submitted_at' => date('Y-m-d H:i:s'),
             'accepted_at' => null,
             'rejected_at' => null,
-        ]);
+        ], $evidence));
     }
 }

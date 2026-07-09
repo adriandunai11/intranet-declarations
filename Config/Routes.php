@@ -26,7 +26,7 @@ $routes->group('declarations', [
     $routes->post('packets/(:num)/items/(:num)/accept', 'PacketsController::acceptItem/$1/$2');
     $routes->post('packets/(:num)/items/(:num)/reject', 'PacketsController::rejectItem/$1/$2');
     $routes->post('packets/(:num)/items/reject-batch', 'PacketsController::rejectItems/$1');
-    $routes->post('packets/(:num)/items/(:num)/documents/generate/(:segment)', 'PacketsController::generateItemDocument/$1/$2/$3');
+    $routes->post('packets/(:num)/items/(:num)/documents/generate/pdf', 'PacketsController::generateItemDocument/$1/$2/pdf');
     $routes->get('packets/(:num)/items/(:num)/documents/preview', 'PacketsController::previewItemDocument/$1/$2');
     $routes->post('packets/(:num)/invitation/send-new-link', 'PacketsController::sendNewInvitationLink/$1');
     $routes->post('packets/(:num)/close', 'PacketsController::closePacket/$1');

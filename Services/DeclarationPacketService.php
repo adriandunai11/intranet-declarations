@@ -63,7 +63,10 @@ class DeclarationPacketService
 
     public function getAvailableTemplates(?int $taxYear = null): array
     {
-        return $this->templateModel->findActiveForYear($taxYear);
+        return array_values(array_filter(
+            $this->templateModel->findActiveForYear($taxYear),
+            fn($template): bool => $this->formRegistry->hasConcreteHandlerForTemplate($template)
+        ));
     }
 
     public function findPacketsByPersonId(int $personId): array
@@ -624,8 +627,9 @@ class DeclarationPacketService
             $existingTemplateIds[(int) $item->template_id] = true;
         }
 
-        return array_values(array_filter($templates, static function ($template) use ($existingTemplateIds): bool {
-            return empty($existingTemplateIds[(int) $template->id]);
+        return array_values(array_filter($templates, function ($template) use ($existingTemplateIds): bool {
+            return empty($existingTemplateIds[(int) $template->id])
+                && $this->formRegistry->hasConcreteHandlerForTemplate($template);
         }));
     }
 

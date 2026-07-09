@@ -291,6 +291,43 @@
                                                     <?php endforeach; ?>
                                                 </dl>
 
+                                                <?php
+                                                $evidenceRows = [];
+
+                                                if (!empty($submission->submitter_email)) {
+                                                    $evidenceRows['Kitöltő e-mail'] = $submission->submitter_email;
+                                                }
+
+                                                if (!empty($submission->submitter_user_id)) {
+                                                    $evidenceRows['Intranet felhasználó'] = '#' . (int) $submission->submitter_user_id;
+                                                }
+
+                                                if (!empty($submission->submitter_ip_address)) {
+                                                    $evidenceRows['IP cím'] = $submission->submitter_ip_address;
+                                                }
+
+                                                if (!empty($submission->submitter_user_agent)) {
+                                                    $evidenceRows['Böngésző'] = $submission->submitter_user_agent;
+                                                }
+
+                                                if (!empty($submission->submission_hash)) {
+                                                    $evidenceRows['Adatlenyomat'] = strtoupper((string) ($submission->hash_algorithm ?: 'sha256')) . ': ' . $submission->submission_hash;
+                                                }
+                                                ?>
+
+                                                <?php if (!empty($evidenceRows)): ?>
+                                                    <hr>
+                                                    <div class="alert alert-light border mb-0">
+                                                        <strong>Beküldési bizonyíték</strong>
+                                                        <dl class="row mb-0 mt-2">
+                                                            <?php foreach ($evidenceRows as $label => $value): ?>
+                                                                <dt class="col-sm-4 col-lg-3"><?= esc($label) ?></dt>
+                                                                <dd class="col-sm-8 col-lg-9 text-break"><?= esc($value) ?></dd>
+                                                            <?php endforeach; ?>
+                                                        </dl>
+                                                    </div>
+                                                <?php endif; ?>
+
                                                 <?php if ($submission && $item->status === 'completed' && $canReview): ?>
                                                     <hr>
 
@@ -354,7 +391,7 @@
                                                         <?= form_close() ?>
                                                     </div>
                                                     <div class="text-muted small">
-                                                        A PDF a beküldött online űrlapadatokból készül, DOCX sablon nélkül.
+                                                        A PDF a beküldött online űrlapadatokból készül.
                                                     </div>
                                                 <?php endif; ?>
                                             <?php endif; ?>
@@ -390,19 +427,28 @@
                     </p>
 
                     <?php if ($latestInvitation): ?>
-                        <dl class="row">
-                            <dt class="col-sm-4">E-mail</dt>
-                            <dd class="col-sm-8"><?= esc($latestInvitation->email ?: '-') ?></dd>
-
-                            <dt class="col-sm-4">Kiküldve</dt>
-                            <dd class="col-sm-8"><?= esc($latestInvitation->sent_at ?: '-') ?></dd>
-
-                            <dt class="col-sm-4">Megnyitva</dt>
-                            <dd class="col-sm-8"><?= esc($latestInvitation->opened_at ?: '-') ?></dd>
-
-                            <dt class="col-sm-4">Lejárat</dt>
-                            <dd class="col-sm-8"><?= esc($latestInvitation->expires_at ?: '-') ?></dd>
-                        </dl>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-borderless mb-0">
+                                <tbody>
+                                    <tr>
+                                        <th class="pl-0" style="width: 160px;">E-mail</th>
+                                        <td><?= esc($latestInvitation->email ?: '-') ?></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="pl-0">Kiküldve</th>
+                                        <td><?= esc($latestInvitation->sent_at ?: '-') ?></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="pl-0">Megnyitva</th>
+                                        <td><?= esc($latestInvitation->opened_at ?: '-') ?></td>
+                                    </tr>
+                                    <tr>
+                                        <th class="pl-0">Lejárat</th>
+                                        <td><?= esc($latestInvitation->expires_at ?: '-') ?></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     <?php else: ?>
                         <p class="text-muted">Még nincs létrehozott meghívó link ehhez a csomaghoz.</p>
                     <?php endif; ?>

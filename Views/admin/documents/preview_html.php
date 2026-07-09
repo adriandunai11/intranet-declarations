@@ -136,9 +136,10 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
                 <span class="declaration-preview-kicker"><?= esc($summary['subtitle'] ?? 'Online kitöltési összesítő') ?></span>
                 <h2 class="declaration-preview-title"><?= esc($summary['title'] ?? ($item->template_name ?? 'Nyilatkozat')) ?></h2>
                 <div class="declaration-preview-subtitle">
-                    Sablon: <?= esc($templateFile ?? '-') ?>
                     <?php if (!empty($item->template_version)): ?>
-                        · Verzió: <?= esc($item->template_version) ?>
+                        Verzió: <?= esc($item->template_version) ?>
+                    <?php else: ?>
+                        Online kitöltésből készült előnézet
                     <?php endif; ?>
                 </div>
             </div>

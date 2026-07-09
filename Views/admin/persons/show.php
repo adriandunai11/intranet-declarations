@@ -20,6 +20,23 @@
 </section>
 
 <section class="content">
+    <?php
+    $selfServiceRelationCount = 0;
+
+    foreach ($relations as $relation) {
+        $relationIsClosed = in_array((string) $relation->status, ['closed', 'cancelled'], true);
+        $relationIntranetUserId = (int) ($relation->intranet_user_id ?? 0);
+
+        if (
+            !$relationIsClosed
+            && !empty($person->intranet_user_id)
+            && ($relationIntranetUserId === 0 || $relationIntranetUserId === (int) $person->intranet_user_id)
+        ) {
+            $selfServiceRelationCount++;
+        }
+    }
+    ?>
+
     <div class="row">
         <div class="col-lg-4">
             <div class="card">
@@ -34,6 +51,11 @@
 
                     <strong>Antra azonosító</strong>
                     <p class="text-muted"><?= esc($person->antra_id ?: '-') ?></p>
+
+                    <strong>Intranet felhasználó</strong>
+                    <p class="text-muted">
+                        <?= !empty($person->intranet_user_id) ? '#' . (int) $person->intranet_user_id : '-' ?>
+                    </p>
 
                     <strong>E-mail</strong>
                     <p class="text-muted"><?= esc($person->email ?: '-') ?></p>
@@ -61,6 +83,37 @@
 
                     <strong>Állapot</strong>
                     <p class="text-muted"><?= esc($person->status ?: '-') ?></p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        Munkavállalói önkiszolgáló
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <?php if (empty($person->intranet_user_id)): ?>
+                        <div class="alert alert-warning mb-0">
+                            A személy nincs intranet felhasználóhoz kötve, ezért saját nyilatkozatindítást még nem tud használni.
+                        </div>
+                    <?php else: ?>
+                        <p>
+                            <span class="badge badge-success">Intranethez kötve</span>
+                        </p>
+
+                        <dl class="row mb-3">
+                            <dt class="col-sm-6">Felhasználó</dt>
+                            <dd class="col-sm-6">#<?= (int) $person->intranet_user_id ?></dd>
+
+                            <dt class="col-sm-6">Használható jogviszony</dt>
+                            <dd class="col-sm-6"><?= (int) $selfServiceRelationCount ?></dd>
+                        </dl>
+
+                        <p class="text-muted mb-0">
+                            A dolgozó belépés után a Nyilatkozataim menüpontban tud új éves nyilatkozatot indítani.
+                        </p>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -104,6 +157,7 @@
                                         <th>Státusz</th>
                                         <th>Telephely</th>
                                         <th>Elsődleges toborzó</th>
+                                        <th>Intranet user</th>
                                         <th>Kezdés</th>
                                         <th>Lezárás</th>
                                         <th>Művelet</th>
@@ -118,6 +172,14 @@
                                             || !empty($sentPacketCompanyYearKeys[$companyYearKey]);
                                         $draftPacket = $draftPacketsByRelationId[$relationId] ?? null;
                                         $isClosedRelation = in_array((string) $relation->status, ['closed', 'cancelled'], true);
+                                        $relationIntranetUserId = (int) ($relation->intranet_user_id ?? 0);
+                                        $selfServiceEnabledForRelation = !$isClosedRelation
+                                            && !empty($person->intranet_user_id)
+                                            && ($relationIntranetUserId === 0 || $relationIntranetUserId === (int) $person->intranet_user_id);
+                                        $selfServiceBlockedByOtherUser = !$isClosedRelation
+                                            && !empty($person->intranet_user_id)
+                                            && $relationIntranetUserId > 0
+                                            && $relationIntranetUserId !== (int) $person->intranet_user_id;
                                         ?>
                                         <tr>
                                             <td><?= esc($divisionNames[(int) $relation->company_id] ?? ('#' . $relation->company_id)) ?>
@@ -153,6 +215,9 @@
                                             <td>
                                                 <?= esc($recruiterDisplayNames[(int) $relation->primary_recruiter_user_id] ?? '-') ?>
                                             </td>
+                                            <td>
+                                                <?= !empty($relation->intranet_user_id) ? '#' . (int) $relation->intranet_user_id : '-' ?>
+                                            </td>
                                             <td><?= esc($relation->start_date ?: '-') ?></td>
                                             <td><?= esc($relation->end_date ?: '-') ?></td>
                                             <td>
@@ -187,6 +252,12 @@
                                                         <i class="fas fa-unlock pr-1"></i> Visszanyitás
                                                     </button>
                                                     <?= form_close() ?>
+                                                <?php endif; ?>
+
+                                                <?php if ($selfServiceEnabledForRelation): ?>
+                                                    <span class="badge badge-success d-block mt-1">Saját indítás engedélyezve</span>
+                                                <?php elseif ($selfServiceBlockedByOtherUser): ?>
+                                                    <span class="badge badge-danger d-block mt-1">Más intranet felhasználóhoz kötve</span>
                                                 <?php endif; ?>
                                             </td>
                                         </tr>
@@ -254,13 +325,13 @@
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">
-                        Személy előzmények
+                        Személy és jogviszony előzmények
                     </h3>
                 </div>
 
                 <div class="card-body">
                     <p class="text-muted">
-                        A személyhez és jogviszonyaihoz tartozó naplózott események külön oldalon, nagyobb nézetben érhetők el.
+                        A személyhez, jogviszonyokhoz és nyilatkozatcsomagokhoz tartozó naplózott események külön oldalon, nagyobb nézetben érhetők el.
                     </p>
 
                     <a href="<?= url('declarations/persons/' . (int) $person->id . '/audit') ?>" class="btn btn-default">

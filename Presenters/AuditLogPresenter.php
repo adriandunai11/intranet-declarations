@@ -40,6 +40,8 @@ class AuditLogPresenter
         'rejection_email_sent' => 'Javítási e-mail kiküldve',
         'packet_review_email_sent' => 'Ellenőrzési e-mail kiküldve',
         'document_generated' => 'Dokumentum generálva',
+        'employee_self_service_packet_created' => 'Saját indítású csomag létrehozva',
+        'employee_self_service_invitation_email_sent' => 'Saját indítású link kiküldve',
     ];
 
     private array $entityLabels = [
@@ -91,8 +93,6 @@ class AuditLogPresenter
         'template_code' => 'Kód',
         'template_id' => 'Sablon ID',
         'template_version' => 'Sablon verzió',
-        'template_file' => 'Sablon fájl',
-        'resolved_template_path' => 'Feloldott sablon',
         'output_path' => 'Kimeneti fájl',
         'format' => 'Formátum',
         'tax_year' => 'Adóév',
@@ -123,6 +123,11 @@ class AuditLogPresenter
         'old_submission_status' => 'Korábbi beküldési státusz',
         'new_submission_status' => 'Új beküldési státusz',
         'review_note' => 'Megjegyzés',
+        'submitter_email' => 'Kitöltő e-mail címe',
+        'submitter_user_id' => 'Kitöltő intranet felhasználó',
+        'submitter_type' => 'Kitöltő típusa',
+        'submission_hash' => 'Beküldött adatok SHA-256 hash',
+        'hash_algorithm' => 'Hash algoritmus',
     ];
 
     private array $contextLabels = [
@@ -291,6 +296,7 @@ class AuditLogPresenter
     {
         return [
             'candidate' => 'Kitöltő',
+            'employee' => 'Munkavállaló',
             'admin_user' => 'Admin',
             'system' => 'Rendszer',
             'payroll' => 'Munkaügy',
@@ -302,6 +308,7 @@ class AuditLogPresenter
     {
         return [
             'candidate' => 'info',
+            'employee' => 'success',
             'admin_user' => 'primary',
             'system' => 'secondary',
             'payroll' => 'success',

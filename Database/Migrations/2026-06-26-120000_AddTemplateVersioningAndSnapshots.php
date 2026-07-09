@@ -9,16 +9,10 @@ class AddTemplateVersioningAndSnapshots extends Migration
     public function up(): void
     {
         $this->forge->addColumn('declaration_templates', [
-            'template_file' => [
-                'type' => 'VARCHAR',
-                'constraint' => 255,
-                'null' => true,
-                'after' => 'version',
-            ],
             'effective_from' => [
                 'type' => 'DATE',
                 'null' => true,
-                'after' => 'template_file',
+                'after' => 'version',
             ],
             'effective_to' => [
                 'type' => 'DATE',
@@ -52,17 +46,7 @@ class AddTemplateVersioningAndSnapshots extends Migration
                 'null' => true,
                 'after' => 'template_name_snapshot',
             ],
-            'template_file_snapshot' => [
-                'type' => 'VARCHAR',
-                'constraint' => 255,
-                'null' => true,
-                'after' => 'template_version_snapshot',
-            ],
         ]);
-
-        $this->db->query(
-            "UPDATE declaration_templates SET template_file = CONCAT(code, '.docx') WHERE template_file IS NULL OR template_file = ''"
-        );
 
         $this->db->query(
             "UPDATE declaration_packet_items dpi
@@ -70,8 +54,7 @@ class AddTemplateVersioningAndSnapshots extends Migration
              SET
                 dpi.template_code_snapshot = COALESCE(NULLIF(dpi.template_code_snapshot, ''), dt.code),
                 dpi.template_name_snapshot = COALESCE(NULLIF(dpi.template_name_snapshot, ''), dt.name),
-                dpi.template_version_snapshot = COALESCE(NULLIF(dpi.template_version_snapshot, ''), dt.version),
-                dpi.template_file_snapshot = COALESCE(NULLIF(dpi.template_file_snapshot, ''), dt.template_file)"
+                dpi.template_version_snapshot = COALESCE(NULLIF(dpi.template_version_snapshot, ''), dt.version)"
         );
     }
 
@@ -81,11 +64,9 @@ class AddTemplateVersioningAndSnapshots extends Migration
             'template_code_snapshot',
             'template_name_snapshot',
             'template_version_snapshot',
-            'template_file_snapshot',
         ]);
 
         $this->forge->dropColumn('declaration_templates', [
-            'template_file',
             'effective_from',
             'effective_to',
             'parent_template_id',

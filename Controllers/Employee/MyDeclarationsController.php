@@ -35,7 +35,7 @@ class MyDeclarationsController extends AdminBaseController
                 'relations' => [],
                 'templates' => [],
                 'packets' => [],
-                'defaultTaxYear' => (int) date('Y') + 1,
+                'defaultTaxYear' => (int) date('Y'),
                 'pageError' => $e->getMessage(),
             ]);
         }

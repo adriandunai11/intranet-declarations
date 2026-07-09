@@ -72,6 +72,7 @@ class AuditActorResolverService
             'primary_recruiter_user_id',
             'reviewed_by_user_id',
             'created_by_user_id',
+            'submitter_user_id',
             'updated_by_user_id',
             'closed_by_user_id',
             'reopened_by_user_id',

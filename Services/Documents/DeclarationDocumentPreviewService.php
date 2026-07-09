@@ -98,7 +98,6 @@ class DeclarationDocumentPreviewService
             'relation' => $relation,
             'company' => $company,
             'templatePath' => null,
-            'templateFile' => null,
             'documentSummary' => $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company),
             'warning' => $warning,
         ];

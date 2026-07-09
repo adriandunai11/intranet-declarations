@@ -155,7 +155,6 @@ class DeclarationDocumentPlaceholderService
             'Cég' => (string) ($company->name ?? '-'),
             'Adóév' => (string) ($packet->tax_year ?? '-'),
             'Sablonverzió' => (string) ($item->template_version ?? '-'),
-            'Sablonfájl' => (string) ($item->template_file ?? '-'),
             'Beküldve' => (string) ($submission->submitted_at ?? '-'),
         ];
 
@@ -168,7 +167,7 @@ class DeclarationDocumentPlaceholderService
             'subtitle' => 'Online kitöltési összesítő',
             'meta' => $this->cleanSummaryRows($meta),
             'rows' => $this->summaryRowsFromData($data),
-            'note' => 'A forrás DOCX sablon változatlanul megmarad. Ez az összesítő a kitöltő online űrlapon megadott adataiból készül a generált dokumentumhoz és előnézethez.',
+            'note' => 'Ez az összesítő a kitöltő online űrlapon megadott adataiból készül.',
         ];
     }
 

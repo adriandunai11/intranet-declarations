@@ -25,6 +25,7 @@ class DeclarationSubmission extends Entity
         'template_id' => 'integer',
         'person_id' => 'integer',
         'employment_relation_id' => 'integer',
+        'submitter_user_id' => '?integer',
         'data_json' => 'json',
     ];
 }
