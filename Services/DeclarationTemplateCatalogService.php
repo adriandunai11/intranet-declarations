@@ -20,6 +20,8 @@ class DeclarationTemplateCatalogService
      */
     public function sync(): array
     {
+        $this->ensureDetailsJsonColumn();
+
         $result = [
             'created' => 0,
             'updated' => 0,
@@ -166,6 +168,17 @@ class DeclarationTemplateCatalogService
         $payload['details_json'] = json_encode($details, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         return $payload;
+    }
+
+    private function ensureDetailsJsonColumn(): void
+    {
+        $db = db_connect();
+
+        if ($db->fieldExists('details_json', 'declaration_templates')) {
+            return;
+        }
+
+        $db->query('ALTER TABLE `declaration_templates` ADD `details_json` TEXT NULL AFTER `description`');
     }
 
     private function errors(string $fallback): string
