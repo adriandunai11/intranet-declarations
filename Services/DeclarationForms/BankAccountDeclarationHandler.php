@@ -15,7 +15,10 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
     }
     public function supports(string $templateCode): bool
     {
-        return $templateCode === 'bank_account_statement';
+        return in_array($templateCode, [
+            'bank_account_statement',
+            'bank_account_change_statement',
+        ], true);
     }
 
     public function title(object $item): string
