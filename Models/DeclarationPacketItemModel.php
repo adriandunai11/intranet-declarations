@@ -86,6 +86,8 @@ class DeclarationPacketItemModel extends Model
             'declaration_templates.is_candidate_selectable AS template_is_candidate_selectable',
             'declaration_templates.tax_year AS template_tax_year',
             'declaration_templates.required_policy AS template_required_policy',
+            'declaration_templates.description AS template_description',
+            'declaration_templates.details_json AS template_details_json',
         ])
             ->join('declaration_templates', 'declaration_templates.id = declaration_packet_items.template_id', 'left')
             ->where('declaration_packet_items.packet_id', $packetId)
