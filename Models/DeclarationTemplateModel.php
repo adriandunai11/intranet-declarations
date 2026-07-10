@@ -33,6 +33,7 @@ class DeclarationTemplateModel extends Model
         'company_scope',
         'class_name',
         'description',
+        'details_json',
         'sort_order',
         'is_active',
     ];
@@ -54,6 +55,8 @@ class DeclarationTemplateModel extends Model
         'is_candidate_selectable' => 'permit_empty|in_list[0,1]',
         'company_scope' => 'required|max_length[50]',
         'class_name' => 'permit_empty|max_length[255]',
+        'description' => 'permit_empty',
+        'details_json' => 'permit_empty',
         'sort_order' => 'permit_empty|integer',
         'is_active' => 'permit_empty|in_list[0,1]',
     ];
