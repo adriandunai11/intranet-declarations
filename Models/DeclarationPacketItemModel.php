@@ -71,7 +71,7 @@ class DeclarationPacketItemModel extends Model
 
     public function findWithTemplatesByPacketId(int $packetId): array
     {
-        return $this->select([
+        $select = [
             'declaration_packet_items.*',
             'COALESCE(declaration_packet_items.template_code_snapshot, declaration_templates.code) AS template_code',
             'COALESCE(declaration_packet_items.template_name_snapshot, declaration_templates.name) AS template_name',
@@ -87,8 +87,13 @@ class DeclarationPacketItemModel extends Model
             'declaration_templates.tax_year AS template_tax_year',
             'declaration_templates.required_policy AS template_required_policy',
             'declaration_templates.description AS template_description',
-            'declaration_templates.details_json AS template_details_json',
-        ])
+        ];
+
+        if (db_connect()->fieldExists('details_json', 'declaration_templates')) {
+            $select[] = 'declaration_templates.details_json AS template_details_json';
+        }
+
+        return $this->select($select)
             ->join('declaration_templates', 'declaration_templates.id = declaration_packet_items.template_id', 'left')
             ->where('declaration_packet_items.packet_id', $packetId)
             ->orderBy('declaration_packet_items.sort_order', 'ASC')
