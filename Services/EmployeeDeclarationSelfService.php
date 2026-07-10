@@ -22,6 +22,9 @@ class EmployeeDeclarationSelfService
 {
     private const PERSONAL_DATA_TEMPLATE_CODE = 'personal_data_statement';
     private const BANK_ACCOUNT_TEMPLATE_CODE = 'bank_account_statement';
+    private const BANK_ACCOUNT_CHANGE_TEMPLATE_CODE = 'bank_account_change_statement';
+    private const CHILD_EXTRA_LEAVE_TEMPLATE_CODE = 'child_extra_leave_statement';
+    private const DEDUCTION_TEMPLATE_CODE = 'deduction_statement';
 
     protected PersonModel $personModel;
     protected EmploymentRelationModel $relationModel;
@@ -289,7 +292,10 @@ class EmployeeDeclarationSelfService
 
         return in_array($code, [
             self::BANK_ACCOUNT_TEMPLATE_CODE,
+            self::BANK_ACCOUNT_CHANGE_TEMPLATE_CODE,
             self::PERSONAL_DATA_TEMPLATE_CODE,
+            self::CHILD_EXTRA_LEAVE_TEMPLATE_CODE,
+            self::DEDUCTION_TEMPLATE_CODE,
         ], true);
     }
 
