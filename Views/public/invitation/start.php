@@ -9,6 +9,41 @@ $isPacketClosedForCandidate = in_array($packetStatus, ['submitted', 'approved', 
 $items = $items ?? [];
 $summaryRowsByItemId = $summaryRowsByItemId ?? [];
 
+$templateDetails = static function (object $template): array {
+    if (method_exists($template, 'details')) {
+        return $template->details();
+    }
+
+    $raw = (string) ($template->details_json ?? $template->template_details_json ?? '');
+
+    if ($raw === '') {
+        return [];
+    }
+
+    $decoded = json_decode($raw, true);
+
+    return is_array($decoded) ? $decoded : [];
+};
+
+$templateShortDescription = static function (object $template) use ($templateDetails): string {
+    $details = $templateDetails($template);
+
+    return trim((string) ($details['short_description'] ?? $template->description ?? $template->template_description ?? ''));
+};
+
+$templateLongDescription = static function (object $template) use ($templateDetails, $templateShortDescription): string {
+    $details = $templateDetails($template);
+
+    return trim((string) ($details['long_description'] ?? $templateShortDescription($template)));
+};
+
+$templateKeywords = static function (object $template) use ($templateDetails): array {
+    $details = $templateDetails($template);
+    $keywords = $details['keywords'] ?? [];
+
+    return is_array($keywords) ? array_values(array_filter(array_map('strval', $keywords))) : [];
+};
+
 $itemStats = [
     'total' => count($items),
     'done' => 0,
@@ -94,18 +129,9 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             </div>
 
             <div class="sidebar-stat-list">
-                <div>
-                    <span>Mentett</span>
-                    <strong><?= (int) $itemStats['done'] ?></strong>
-                </div>
-                <div>
-                    <span>Hátralévő</span>
-                    <strong><?= (int) $itemStats['todo'] ?></strong>
-                </div>
-                <div>
-                    <span>Javítandó</span>
-                    <strong><?= (int) $itemStats['rejected'] ?></strong>
-                </div>
+                <div><span>Mentett</span><strong><?= (int) $itemStats['done'] ?></strong></div>
+                <div><span>Hátralévő</span><strong><?= (int) $itemStats['todo'] ?></strong></div>
+                <div><span>Javítandó</span><strong><?= (int) $itemStats['rejected'] ?></strong></div>
             </div>
         </section>
 
@@ -159,9 +185,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             <section class="primary-next-card" id="document-preview-check">
                 <div>
                     <div class="primary-next-title">A csomag ellenőrzésre kész</div>
-                    <p class="primary-next-text">
-                        Minden csomagban lévő dokumentum mentve van. Az összes adat egyben a következő oldalon ellenőrizhető.
-                    </p>
+                    <p class="primary-next-text">Minden csomagban lévő dokumentum mentve van. Az összes adat egyben a következő oldalon ellenőrizhető.</p>
                 </div>
                 <a href="<?= esc($reviewUrl) ?>" class="btn btn-primary">Ellenőrzés és beküldés</a>
             </section>
@@ -232,17 +256,17 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                         }
 
                         $itemUrl = $itemUrls[(int) $item->id] ?? '#';
+                        $itemDetails = $templateDetails($item);
+                        $itemDialogId = 'template-detail-item-' . (int) $item->id;
                         ?>
                         <li class="task-item <?= esc($stateClass) ?> <?= $status === 'rejected' ? 'task-item-warning' : '' ?>">
                             <span class="state-dot" aria-hidden="true"></span>
                             <div class="task-main">
-                                <div class="task-title">
-                                    <a href="<?= esc($itemUrl) ?>"><?= esc($item->template_name ?: ('Dokumentum #' . $item->template_id)) ?></a>
-                                </div>
+                                <div class="task-title"><a href="<?= esc($itemUrl) ?>"><?= esc($item->template_name ?: ('Dokumentum #' . $item->template_id)) ?></a></div>
                                 <div class="task-meta">
                                     <?= esc($item->template_category ?: 'Dokumentum') ?>
                                     <?php if (!empty($item->template_tax_year)): ?> · Adóév: <?= esc($item->template_tax_year) ?><?php endif; ?>
-                                    <?php if (!empty($item->template_version)): ?> · Verzió: <?= esc($item->template_version) ?><?php endif; ?>
+                                    <?php if (!empty($item->template_version)): ?> · Verziószám: <?= esc($item->template_version) ?><?php endif; ?>
                                 </div>
 
                                 <?php if ($status === 'rejected' && !empty($item->review_note)): ?>
@@ -252,13 +276,9 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                                 <?php if (!empty($summaryRows)): ?>
                                     <dl class="review-data-list task-summary-list">
                                         <?php foreach (array_slice($summaryRows, 0, 6, true) as $label => $value): ?>
-                                            <div>
-                                                <dt><?= esc($label) ?></dt>
-                                                <dd><?= esc($value !== '' ? $value : '-') ?></dd>
-                                            </div>
+                                            <div><dt><?= esc($label) ?></dt><dd><?= esc($value !== '' ? $value : '-') ?></dd></div>
                                         <?php endforeach; ?>
                                     </dl>
-
                                     <?php if (count($summaryRows) > 6): ?>
                                         <div class="task-meta">További adatok az ellenőrző oldalon és a PDF előnézetben láthatók.</div>
                                     <?php endif; ?>
@@ -266,6 +286,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                             </div>
                             <div class="task-side task-side-horizontal">
                                 <span class="badge <?= esc($badgeClass) ?>"><?= esc($statusLabelForItem) ?></span>
+                                <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($itemDialogId) ?>">Részletek</button>
                                 <a href="<?= esc($itemUrl) ?>" class="<?= esc($actionButtonClass) ?>"><?= esc($actionLabel) ?></a>
                                 <?php if ($canPreview): ?>
                                     <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">PDF előnézet</a>
@@ -296,25 +317,28 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             <?php else: ?>
                 <ul class="optional-list">
                     <?php foreach ($optionalTaxTemplates as $template): ?>
+                        <?php $dialogId = 'template-detail-' . (int) $template->id; ?>
                         <li class="task-item">
                             <span class="state-dot" aria-hidden="true"></span>
                             <div>
                                 <div class="task-title"><?= esc($template->name) ?></div>
                                 <div class="task-meta">
-                                    <?php if (!empty($template->tax_year)): ?>Adóév: <?= esc($template->tax_year) ?> · <?php endif; ?>
-                                    <?= esc($template->description ?: 'Választható adóügyi nyilatkozat.') ?>
+                                    Verziószám <?= esc($template->version ?: '1.0') ?>
+                                    <?php if (!empty($template->tax_year)): ?> · Adóév: <?= esc($template->tax_year) ?><?php else: ?> · Adóév -<?php endif; ?>
                                 </div>
+                                <div class="task-meta"><?= esc($templateShortDescription($template) ?: 'Választható adóügyi nyilatkozat.') ?></div>
                             </div>
-                            <div class="task-side">
+                            <div class="task-side task-side-horizontal">
                                 <?php $isSupported = (bool) ($optionalTaxTemplateSupport[(int) $template->id] ?? false); ?>
                                 <?php if ($isSupported): ?>
                                     <form method="post" action="<?= esc($startUrl . '/tax-template/' . (int) $template->id . '/select') ?>">
                                         <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-secondary btn-sm">Hozzáadás</button>
+                                        <button type="submit" class="btn btn-secondary btn-sm">Kiválaszt</button>
                                     </form>
                                 <?php else: ?>
                                     <span class="badge badge-default">Előkészítés alatt</span>
                                 <?php endif; ?>
+                                <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($dialogId) ?>">Részletek</button>
                             </div>
                         </li>
                     <?php endforeach; ?>
@@ -323,5 +347,89 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
         </section>
     </main>
 </div>
+
+<?php foreach ($items as $item): ?>
+    <?php
+    $details = $templateDetails($item);
+    $dialogId = 'template-detail-item-' . (int) $item->id;
+    $keywords = $templateKeywords($item);
+    ?>
+    <dialog class="confirm-dialog" id="<?= esc($dialogId) ?>">
+        <div class="confirm-dialog-card">
+            <h2><?= esc($item->template_name ?: 'Nyilatkozat részletei') ?></h2>
+            <p><?= nl2br(esc($templateLongDescription($item) ?: 'Ehhez a nyilatkozathoz nincs külön részletes leírás rögzítve.')) ?></p>
+            <dl class="review-data-list">
+                <div><dt>Verziószám</dt><dd><?= esc($item->template_version ?: '1.0') ?></dd></div>
+                <div><dt>Adóév</dt><dd><?= esc($item->template_tax_year ?: '-') ?></dd></div>
+                <div><dt>Adónem csoport</dt><dd><?= esc($details['tax_group'] ?? '-') ?></dd></div>
+                <div><dt>Adózói kör</dt><dd><?= esc($details['taxpayer_scope'] ?? '-') ?></dd></div>
+                <?php if ($keywords !== []): ?>
+                    <div><dt>Kulcsszavak</dt><dd><?= esc(implode(', ', $keywords)) ?></dd></div>
+                <?php endif; ?>
+            </dl>
+            <div class="confirm-dialog-actions">
+                <button type="button" class="btn btn-secondary" data-template-details-close>Vissza</button>
+            </div>
+        </div>
+    </dialog>
+<?php endforeach; ?>
+
+<?php foreach ($optionalTaxTemplates as $template): ?>
+    <?php
+    $details = $templateDetails($template);
+    $dialogId = 'template-detail-' . (int) $template->id;
+    $keywords = $templateKeywords($template);
+    ?>
+    <dialog class="confirm-dialog" id="<?= esc($dialogId) ?>">
+        <div class="confirm-dialog-card">
+            <h2><?= esc($template->name ?: 'Nyilatkozat részletei') ?></h2>
+            <p><?= nl2br(esc($templateLongDescription($template) ?: 'Ehhez a nyilatkozathoz nincs külön részletes leírás rögzítve.')) ?></p>
+            <dl class="review-data-list">
+                <div><dt>Verziószám</dt><dd><?= esc($template->version ?: '1.0') ?></dd></div>
+                <div><dt>Adóév</dt><dd><?= esc($template->tax_year ?: '-') ?></dd></div>
+                <div><dt>Adónem csoport</dt><dd><?= esc($details['tax_group'] ?? '-') ?></dd></div>
+                <div><dt>Adózói kör</dt><dd><?= esc($details['taxpayer_scope'] ?? '-') ?></dd></div>
+                <?php if ($keywords !== []): ?>
+                    <div><dt>Kulcsszavak</dt><dd><?= esc(implode(', ', $keywords)) ?></dd></div>
+                <?php endif; ?>
+            </dl>
+            <div class="confirm-dialog-actions">
+                <button type="button" class="btn btn-secondary" data-template-details-close>Vissza</button>
+            </div>
+        </div>
+    </dialog>
+<?php endforeach; ?>
+
+<script>
+    (function () {
+        document.querySelectorAll('[data-template-details-target]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var dialog = document.getElementById(button.getAttribute('data-template-details-target'));
+
+                if (!dialog) return;
+
+                if (typeof dialog.showModal === 'function') {
+                    dialog.showModal();
+                } else {
+                    dialog.setAttribute('open', 'open');
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-template-details-close]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var dialog = button.closest('dialog');
+
+                if (!dialog) return;
+
+                if (typeof dialog.close === 'function') {
+                    dialog.close();
+                } else {
+                    dialog.removeAttribute('open');
+                }
+            });
+        });
+    })();
+</script>
 
 <?= $this->endSection() ?>
