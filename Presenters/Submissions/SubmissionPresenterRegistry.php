@@ -18,6 +18,7 @@ class SubmissionPresenterRegistry
         $this->presenters = [
             new PersonalDataSubmissionPresenter(),
             new BankAccountSubmissionPresenter(),
+            new TaxSubmissionPresenter(),
         ];
 
         $this->fallbackPresenter = new GenericSubmissionPresenter();

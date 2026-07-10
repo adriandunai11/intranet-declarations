@@ -3,9 +3,17 @@
 namespace App\Modules\Declarations\Services\Documents;
 
 use App\Modules\Declarations\Entities\DeclarationSubmission;
+use App\Modules\Declarations\Services\DeclarationSubmissionDataNormalizer;
 
 class DeclarationDocumentPlaceholderService
 {
+    private DeclarationSubmissionDataNormalizer $dataNormalizer;
+
+    public function __construct(?DeclarationSubmissionDataNormalizer $dataNormalizer = null)
+    {
+        $this->dataNormalizer = $dataNormalizer ?? new DeclarationSubmissionDataNormalizer();
+    }
+
     /**
      * @return list<string>
      */
@@ -188,23 +196,7 @@ class DeclarationDocumentPlaceholderService
             return [];
         }
 
-        $data = $submission->data_json ?? [];
-
-        if ($data instanceof \stdClass) {
-            $data = (array) $data;
-        }
-
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-
-            if (is_string($decoded)) {
-                $decoded = json_decode($decoded, true);
-            }
-
-            $data = is_array($decoded) ? $decoded : [];
-        }
-
-        return is_array($data) ? $data : [];
+        return $this->dataNormalizer->normalize($submission->data_json ?? []);
     }
 
     /**

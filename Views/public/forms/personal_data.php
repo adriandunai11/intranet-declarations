@@ -144,7 +144,7 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                                 maxlength="10" inputmode="numeric" autocomplete="off" placeholder="10 számjegy"
                                 data-format="digits" data-max-digits="10"
                                 data-validate="required|tax_number" data-label="Adóazonosító jel" required>
-                            <div class="form-help">10 számjegy, kötőjel és szóköz nélkül.</div>
+                            <div class="form-help">10 számjegy, az ellenőrző számot kitöltés közben számoljuk.</div>
                         </div>
 
                         <div class="form-group">
@@ -153,7 +153,7 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                                 value="<?= esc(old('taj_number', $data['taj_number'] ?? ($person->taj_number ?? ''))) ?>"
                                 maxlength="11" inputmode="numeric" autocomplete="off" placeholder="123 456 789"
                                 data-format="taj" data-validate="required|taj_number" data-label="TAJ szám" required>
-                            <div class="form-help">9 számjegy, a mező automatikusan tagolja.</div>
+                            <div class="form-help">9 számjegy, a mező automatikusan tagolja és ellenőrzi.</div>
                         </div>
                     </div>
 

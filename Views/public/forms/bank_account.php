@@ -4,25 +4,11 @@
 
 <?php
 $data = [];
+$submissionDataNormalizer = new \App\Modules\Declarations\Services\DeclarationSubmissionDataNormalizer();
 
 if ($submission && !empty($submission->data_json)) {
     $rawData = $submission->data_json;
-
-    if ($rawData instanceof \stdClass) {
-        $rawData = (array) $rawData;
-    }
-
-    if (is_string($rawData)) {
-        $decoded = json_decode($rawData, true);
-
-        if (is_string($decoded)) {
-            $decoded = json_decode($decoded, true);
-        }
-
-        $rawData = is_array($decoded) ? $decoded : [];
-    }
-
-    $data = is_array($rawData) ? $rawData : [];
+    $data = $submissionDataNormalizer->normalize($rawData);
 }
 
 $validationErrors = session()->getFlashdata('validationErrors') ?? [];
@@ -108,7 +94,11 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                             <label for="bank_name">Bank neve</label>
                             <input type="text" id="bank_name" name="bank_name"
                                 value="<?= esc(old('bank_name', $data['bank_name'] ?? '')) ?>"
-                                autocomplete="organization" data-validate="required|min:2" data-label="Bank neve" required>
+                                autocomplete="organization"
+                                data-validate="bank_name_required_when_unknown|min:2"
+                                data-bank-account-source="#bank_account_number"
+                                data-label="Bank neve">
+                            <div class="form-help">Ha a bankszámlaszám első 3 számjegye alapján felismerhető, automatikusan kitöltjük.</div>
                         </div>
                     </div>
 
@@ -117,8 +107,9 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                         <input type="text" id="bank_account_number" name="bank_account_number"
                             value="<?= esc(old('bank_account_number', $data['bank_account_number'] ?? '')) ?>"
                             placeholder="12345678-12345678-12345678" inputmode="numeric" autocomplete="off" maxlength="26"
-                            data-format="bank_account" data-validate="required|bank_account" data-label="Bankszámlaszám" required>
-                        <div class="form-help">16 vagy 24 számjegy. A mező automatikusan tagolja a számot.</div>
+                            data-format="bank_account" data-bank-name-target="#bank_name" data-bank-hint="#bank_account_bank_hint"
+                            data-validate="required|bank_account" data-label="Bankszámlaszám" required>
+                        <div class="form-help" id="bank_account_bank_hint">16 vagy 24 számjegy. A mező automatikusan tagolja a számot.</div>
                     </div>
                 </section>
 

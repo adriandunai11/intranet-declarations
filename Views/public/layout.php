@@ -81,6 +81,18 @@
             });
         }
 
+        var hungarianBankPrefixes = {
+            '101': 'Magyar Nemzeti Bank',
+            '104': 'K&H Bank',
+            '107': 'CIB Bank',
+            '109': 'UniCredit Bank',
+            '116': 'Erste Bank',
+            '117': 'OTP Bank',
+            '120': 'Raiffeisen Bank',
+            '121': 'Gránit Bank',
+            '162': 'MagNet Bank'
+        };
+
         function labelFor(input) {
             if (input.dataset.label) {
                 return input.dataset.label;
@@ -115,6 +127,43 @@
             return sum % 11 === Number(value.charAt(9));
         }
 
+        function isValidCvdBlock(value) {
+            value = digits(value);
+
+            if (!/^\d{8}$/.test(value)) {
+                return false;
+            }
+
+            var weights = [9, 7, 3, 1, 9, 7, 3, 1];
+            var sum = 0;
+
+            for (var i = 0; i < 8; i++) {
+                sum += Number(value.charAt(i)) * weights[i];
+            }
+
+            return sum % 10 === 0;
+        }
+
+        function isValidHungarianCompanyTaxNumber(value) {
+            value = digits(value);
+
+            if (value.length !== 8 && value.length !== 11) {
+                return false;
+            }
+
+            if (!isValidCvdBlock(value.substring(0, 8))) {
+                return false;
+            }
+
+            if (value.length === 8) {
+                return true;
+            }
+
+            var vatCode = Number(value.charAt(8));
+
+            return vatCode >= 1 && vatCode <= 5;
+        }
+
         function isValidTajNumber(value) {
             value = digits(value);
 
@@ -138,22 +187,25 @@
                 return false;
             }
 
-            var weights = [9, 7, 3, 1, 9, 7, 3, 1];
-
             for (var offset = 0; offset < value.length; offset += 8) {
                 var block = value.substring(offset, offset + 8);
-                var sum = 0;
 
-                for (var i = 0; i < 8; i++) {
-                    sum += Number(block.charAt(i)) * weights[i];
-                }
-
-                if (sum % 10 !== 0) {
+                if (!isValidCvdBlock(block)) {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        function bankNameForAccountNumber(value) {
+            value = digits(value);
+
+            if (value.length < 3) {
+                return '';
+            }
+
+            return hungarianBankPrefixes[value.substring(0, 3)] || '';
         }
 
         function formatInput(input) {
@@ -171,6 +223,18 @@
 
             if (format === 'bank_account') {
                 input.value = value.substring(0, 24).replace(/(\d{8})(?=\d)/g, '$1-').trim();
+            }
+
+            if (format === 'company_tax_number') {
+                value = value.substring(0, 11);
+
+                if (value.length > 9) {
+                    input.value = value.substring(0, 8) + '-' + value.substring(8, 9) + '-' + value.substring(9);
+                } else if (value.length > 8) {
+                    input.value = value.substring(0, 8) + '-' + value.substring(8);
+                } else {
+                    input.value = value;
+                }
             }
         }
 
@@ -222,6 +286,16 @@
                     }
                 }
 
+                if (rule === 'company_tax_number' && !isEmpty(input)) {
+                    if (cleanDigits.length !== 8 && cleanDigits.length !== 11) {
+                        return 'Az adószámnak 8 számjegyű törzsszámnak vagy teljes, 11 számjegyű adószámnak kell lennie.';
+                    }
+
+                    if (!isValidHungarianCompanyTaxNumber(cleanDigits)) {
+                        return 'Az adószám ellenőrző száma hibás.';
+                    }
+                }
+
                 if (rule === 'tax_number_or_fetus' && !isEmpty(input)) {
                     if (value.toLowerCase() === 'magzat') {
                         continue;
@@ -253,6 +327,16 @@
 
                     if (!isValidHungarianBankAccountNumber(cleanDigits)) {
                         return 'A bankszámlaszám ellenőrző száma hibás.';
+                    }
+                }
+
+                if (rule === 'bank_name_required_when_unknown') {
+                    var source = input.dataset.bankAccountSource ? document.querySelector(input.dataset.bankAccountSource) : null;
+                    var sourceDigits = source ? digits(source.value) : '';
+                    var detectedBankName = source ? bankNameForAccountNumber(source.value) : '';
+
+                    if (sourceDigits.length >= 3 && detectedBankName === '' && isEmpty(input)) {
+                        return 'A bank nevét add meg, ha nem ismerjük fel automatikusan a bankszámlaszám elejéből.';
                     }
                 }
             }
@@ -361,6 +445,70 @@
             });
         }
 
+        function setBankHint(input, text) {
+            var hint = input.dataset.bankHint ? document.querySelector(input.dataset.bankHint) : null;
+
+            if (hint) {
+                hint.textContent = text;
+            }
+        }
+
+        function bindBankAccountMetadata(input) {
+            if (input.dataset.bankMetadataBound === '1') {
+                return;
+            }
+
+            input.dataset.bankMetadataBound = '1';
+
+            var target = input.dataset.bankNameTarget ? document.querySelector(input.dataset.bankNameTarget) : null;
+
+            if (target && target.dataset.bankNameTargetBound !== '1') {
+                target.dataset.bankNameTargetBound = '1';
+                target.addEventListener('input', function () {
+                    target.dataset.bankAutofilled = '0';
+                });
+            }
+        }
+
+        function updateBankAccountMetadata(input) {
+            if (!input.dataset.bankNameTarget) {
+                return;
+            }
+
+            var target = document.querySelector(input.dataset.bankNameTarget);
+            var cleanDigits = digits(input.value);
+            var bankName = bankNameForAccountNumber(input.value);
+
+            if (cleanDigits.length < 3) {
+                setBankHint(input, 'Az első 3 számjegyből megpróbáljuk felismerni a bankot.');
+
+                if (target && target.dataset.bankAutofilled === '1') {
+                    target.value = '';
+                    target.dataset.bankAutofilled = '0';
+                }
+
+                return;
+            }
+
+            if (bankName !== '') {
+                setBankHint(input, 'Felismert bank: ' + bankName + '.');
+
+                if (target && (target.value.trim() === '' || target.dataset.bankAutofilled === '1')) {
+                    target.value = bankName;
+                    target.dataset.bankAutofilled = '1';
+                }
+
+                return;
+            }
+
+            setBankHint(input, 'A bankazonosító nincs a helyi listában; ettől a számlaszám még lehet érvényes.');
+
+            if (target && target.dataset.bankAutofilled === '1') {
+                target.value = '';
+                target.dataset.bankAutofilled = '0';
+            }
+        }
+
         function initForm(form) {
             formFields(form).forEach(function (input) {
                 if (input.dataset.validationBound === '1') {
@@ -369,13 +517,19 @@
 
                 input.dataset.validationBound = '1';
 
+                bindBankAccountMetadata(input);
+
                 ['input', 'change', 'blur'].forEach(function (eventName) {
                     input.addEventListener(eventName, function () {
                         input.dataset.touched = '1';
                         formatInput(input);
+                        updateBankAccountMetadata(input);
                         validateForm(form, false);
                     });
                 });
+
+                formatInput(input);
+                updateBankAccountMetadata(input);
             });
 
             if (form.dataset.validationFormBound !== '1') {

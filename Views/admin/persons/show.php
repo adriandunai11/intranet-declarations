@@ -325,13 +325,13 @@
             <div class="card">
                 <div class="card-header">
                     <h3 class="card-title">
-                        Személy és jogviszony előzmények
+                        Személy előzmények
                     </h3>
                 </div>
 
                 <div class="card-body">
                     <p class="text-muted">
-                        A személyhez, jogviszonyokhoz és nyilatkozatcsomagokhoz tartozó naplózott események külön oldalon, nagyobb nézetben érhetők el.
+                        A személyhez tartozó naplózott események külön oldalon, nagyobb nézetben érhetők el.
                     </p>
 
                     <a href="<?= url('declarations/persons/' . (int) $person->id . '/audit') ?>" class="btn btn-default">

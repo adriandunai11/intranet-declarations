@@ -74,6 +74,16 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             $fields[$key] = $this->normalizeValue($field, $rawFields[$key] ?? null);
         }
 
+        foreach ($this->allFields($schema) as $field) {
+            $key = (string) ($field['key'] ?? '');
+
+            if ($key === '' || $this->isFieldVisible($field, $fields)) {
+                continue;
+            }
+
+            $fields[$key] = $this->emptyValueForField($field);
+        }
+
         $repeaters = [];
 
         foreach (($schema['repeaters'] ?? []) as $repeater) {
@@ -145,12 +155,24 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             $key = (string) ($field['key'] ?? '');
             $value = $fields[$key] ?? null;
 
-            if (!empty($field['required']) && $this->isEmptyValue($value, (string) ($field['type'] ?? 'text'))) {
+            if ($this->isFieldRequired($field, $fields) && $this->isEmptyValue($value, (string) ($field['type'] ?? 'text'))) {
                 $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mező kitöltése kötelező.';
+            }
+
+            if (($field['type'] ?? '') === 'date' && !$this->isEmptyValue($value) && !$this->isValidDate((string) $value)) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben hibás dátum szerepel.';
+            }
+
+            if (($field['type'] ?? '') === 'number' && !$this->isEmptyValue($value) && !is_numeric((string) $value)) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben csak szám szerepelhet.';
             }
 
             if (($field['validation'] ?? '') === 'tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidTaxNumber((string) $value)) {
                 $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben hibás az adóazonosító jel.';
+            }
+
+            if (($field['validation'] ?? '') === 'company_tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidCompanyTaxNumber((string) $value)) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben hibás az adószám ellenőrző száma.';
             }
 
             if (($field['validation'] ?? '') === 'tax_number_or_fetus' && !$this->isEmptyValue($value) && !$this->isValidTaxNumberOrFetus((string) $value)) {
@@ -194,8 +216,20 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mező kitöltése kötelező.';
                     }
 
+                    if (($column['type'] ?? '') === 'date' && !$this->isEmptyValue($value) && !$this->isValidDate((string) $value)) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben hibás dátum szerepel.';
+                    }
+
+                    if (($column['type'] ?? '') === 'number' && !$this->isEmptyValue($value) && !is_numeric((string) $value)) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben csak szám szerepelhet.';
+                    }
+
                     if (($column['validation'] ?? '') === 'tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidTaxNumber((string) $value)) {
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben hibás az adóazonosító jel.';
+                    }
+
+                    if (($column['validation'] ?? '') === 'company_tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidCompanyTaxNumber((string) $value)) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben hibás az adószám ellenőrző száma.';
                     }
 
                     if (($column['validation'] ?? '') === 'tax_number_or_fetus' && !$this->isEmptyValue($value) && !$this->isValidTaxNumberOrFetus((string) $value)) {
@@ -208,8 +242,6 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                 }
             }
         }
-
-        $this->validateConditionalRules($fields, $errors);
 
         if ($errors !== []) {
             throw new RuntimeException(implode(' ', array_unique($errors)));
@@ -274,6 +306,10 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             return preg_replace('/\D+/', '', (string) ($value ?? '')) ?? '';
         }
 
+        if (($field['validation'] ?? '') === 'company_tax_number') {
+            return preg_replace('/\D+/', '', (string) ($value ?? '')) ?? '';
+        }
+
         if (($field['validation'] ?? '') === 'tax_number_or_fetus') {
             $text = $this->cleanText($value);
 
@@ -312,6 +348,76 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
 
     /**
      * @param array<string, mixed> $field
+     * @param array<string, mixed> $fields
+     */
+    private function isFieldVisible(array $field, array $fields): bool
+    {
+        $condition = $field['visible_when'] ?? null;
+
+        return !is_array($condition) || $this->conditionMatches($condition, $fields);
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     * @param array<string, mixed> $fields
+     */
+    private function isFieldRequired(array $field, array $fields): bool
+    {
+        if (!$this->isFieldVisible($field, $fields)) {
+            return false;
+        }
+
+        if (!empty($field['required'])) {
+            return true;
+        }
+
+        $condition = $field['required_when'] ?? null;
+
+        return is_array($condition) && $this->conditionMatches($condition, $fields);
+    }
+
+    /**
+     * @param array<string, mixed> $condition
+     * @param array<string, mixed> $fields
+     */
+    private function conditionMatches(array $condition, array $fields): bool
+    {
+        $fieldKey = (string) ($condition['field'] ?? '');
+
+        if ($fieldKey === '') {
+            return false;
+        }
+
+        $actual = (string) ($fields[$fieldKey] ?? '');
+
+        if (isset($condition['values']) && is_array($condition['values'])) {
+            return in_array($actual, array_map('strval', $condition['values']), true);
+        }
+
+        return $actual === (string) ($condition['value'] ?? '');
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     */
+    private function emptyValueForField(array $field)
+    {
+        return ((string) ($field['type'] ?? 'text')) === 'checkbox' ? 0 : '';
+    }
+
+    private function isValidDate(string $value): bool
+    {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return false;
+        }
+
+        [$year, $month, $day] = array_map('intval', explode('-', $value));
+
+        return checkdate($month, $day, $year);
+    }
+
+    /**
+     * @param array<string, mixed> $field
      */
     private function isAllowedOption(array $field, string $value): bool
     {
@@ -333,39 +439,6 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         }
 
         return $this->identifierValidator->isValidTaxNumber($value);
-    }
-
-    /**
-     * @param array<string, mixed> $fields
-     * @param list<string> $errors
-     */
-    private function validateConditionalRules(array $fields, array &$errors): void
-    {
-        $code = $this->templateCode();
-
-        if (in_array($code, ['family_tax_discount', 'combined_family_mothers_discount'], true)) {
-            if (($fields['claim_scope'] ?? '') === 'shared') {
-                if ($this->isEmptyValue($fields['spouse_name'] ?? '')) {
-                    $errors[] = 'Közös érvényesítésnél a másik jogosult nevét meg kell adni.';
-                }
-
-                if ($this->isEmptyValue($fields['spouse_tax_number'] ?? '')) {
-                    $errors[] = 'Közös érvényesítésnél a másik jogosult adóazonosító jelét meg kell adni.';
-                }
-            }
-
-            if (($fields['calculation_mode'] ?? '') === 'amount' && $this->isEmptyValue($fields['monthly_amount'] ?? '')) {
-                $errors[] = 'Havi forintösszeg választása esetén a havi összeget meg kell adni.';
-            }
-
-            if (($fields['calculation_mode'] ?? '') === 'dependents' && $this->isEmptyValue($fields['beneficiary_dependents_count'] ?? '')) {
-                $errors[] = 'Eltartottak száma alapján történő igénylésnél a kedvezményezett eltartottak számát meg kell adni.';
-            }
-        }
-
-        if ($code === 'under_25_tax_discount_waiver' && ($fields['waiver_scope'] ?? '') === 'partial' && $this->isEmptyValue($fields['monthly_limit'] ?? '')) {
-            $errors[] = 'Részleges mellőzésnél a havi összeghatárt meg kell adni.';
-        }
     }
 
     /**
@@ -437,7 +510,22 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             return (string) ($options[(string) $value] ?? $value ?? '');
         }
 
+        if (($field['validation'] ?? '') === 'company_tax_number') {
+            return $this->formatCompanyTaxNumber((string) ($value ?? ''));
+        }
+
         return trim((string) ($value ?? ''));
+    }
+
+    private function formatCompanyTaxNumber(string $value): string
+    {
+        $value = preg_replace('/\D+/', '', $value) ?? '';
+
+        if (strlen($value) === 11) {
+            return substr($value, 0, 8) . '-' . substr($value, 8, 1) . '-' . substr($value, 9, 2);
+        }
+
+        return $value;
     }
 
     /**
@@ -507,6 +595,10 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
 
         if (($field['type'] ?? '') === 'select') {
             return is_scalar($value) || $value === null ? $value : '';
+        }
+
+        if (($field['validation'] ?? '') === 'company_tax_number') {
+            return $this->formatCompanyTaxNumber((string) ($value ?? ''));
         }
 
         return is_scalar($value) || $value === null ? $value : '';

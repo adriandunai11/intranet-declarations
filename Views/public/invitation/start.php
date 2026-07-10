@@ -185,7 +185,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             <div class="section-heading">
                 <div>
                     <h2>Dokumentumok</h2>
-                    <p class="section-note">A megtekintés gombbal az adott nyilatkozat részletes adatai nyílnak meg. A PDF előnézet csak ott jelenik meg, ahol a sablon alapján generálható dokumentum.</p>
+                    <p class="section-note">A megtekintés gombbal az adott nyilatkozat részletes adatai nyílnak meg. A PDF előnézet a mentett online űrlapadatokból készül.</p>
                 </div>
             </div>
 
@@ -247,6 +247,21 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
 
                                 <?php if ($status === 'rejected' && !empty($item->review_note)): ?>
                                     <div class="item-note"><strong>Javítás oka:</strong> <?= esc($item->review_note) ?></div>
+                                <?php endif; ?>
+
+                                <?php if (!empty($summaryRows)): ?>
+                                    <dl class="review-data-list task-summary-list">
+                                        <?php foreach (array_slice($summaryRows, 0, 6, true) as $label => $value): ?>
+                                            <div>
+                                                <dt><?= esc($label) ?></dt>
+                                                <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </dl>
+
+                                    <?php if (count($summaryRows) > 6): ?>
+                                        <div class="task-meta">További adatok az ellenőrző oldalon és a PDF előnézetben láthatók.</div>
+                                    <?php endif; ?>
                                 <?php endif; ?>
                             </div>
                             <div class="task-side task-side-horizontal">

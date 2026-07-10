@@ -4,25 +4,11 @@
 
 <?php
 $data = [];
+$submissionDataNormalizer = new \App\Modules\Declarations\Services\DeclarationSubmissionDataNormalizer();
 
 if ($submission && !empty($submission->data_json)) {
     $rawData = $submission->data_json;
-
-    if ($rawData instanceof \stdClass) {
-        $rawData = (array) $rawData;
-    }
-
-    if (is_string($rawData)) {
-        $decoded = json_decode($rawData, true);
-
-        if (is_string($decoded)) {
-            $decoded = json_decode($decoded, true);
-        }
-
-        $rawData = is_array($decoded) ? $decoded : [];
-    }
-
-    $data = is_array($rawData) ? $rawData : [];
+    $data = $submissionDataNormalizer->normalize($rawData);
 }
 
 $schema = is_array($taxFormSchema ?? null) ? $taxFormSchema : [];
@@ -57,6 +43,10 @@ $rulesForField = static function (array $field): string {
         $rules[] = 'tax_number';
     }
 
+    if (($field['validation'] ?? '') === 'company_tax_number') {
+        $rules[] = 'company_tax_number';
+    }
+
     if (($field['validation'] ?? '') === 'tax_number_or_fetus') {
         $rules[] = 'tax_number_or_fetus';
     }
@@ -64,20 +54,76 @@ $rulesForField = static function (array $field): string {
     return implode('|', $rules);
 };
 
-$renderField = static function (array $field, string $name, string $id, $value) use ($rulesForField): string {
+$conditionAttributes = static function (array $field, string $conditionKey): string {
+    $condition = $field[$conditionKey] ?? null;
+
+    if (!is_array($condition)) {
+        return '';
+    }
+
+    $fieldKey = trim((string) ($condition['field'] ?? ''));
+
+    if ($fieldKey === '') {
+        return '';
+    }
+
+    $prefix = $conditionKey === 'required_when' ? 'required-when' : 'visible-when';
+    $attributes = ' data-' . $prefix . '-field="' . esc($fieldKey) . '"';
+
+    if (isset($condition['values']) && is_array($condition['values'])) {
+        $values = implode('|', array_map('strval', $condition['values']));
+        $attributes .= ' data-' . $prefix . '-values="' . esc($values) . '"';
+    } else {
+        $attributes .= ' data-' . $prefix . '-value="' . esc((string) ($condition['value'] ?? '')) . '"';
+    }
+
+    return $attributes;
+};
+
+$shellAttributes = static function (array $field) use ($conditionAttributes): string {
+    $attributes = $conditionAttributes($field, 'visible_when');
+
+    if ($attributes !== '') {
+        $attributes = ' data-conditional-field' . $attributes;
+    }
+
+    return $attributes;
+};
+
+$inputConditionAttributes = static function (array $field) use ($conditionAttributes): string {
+    return $conditionAttributes($field, 'visible_when')
+        . $conditionAttributes($field, 'required_when');
+};
+
+$sectionAttributes = static function (array $section) use ($conditionAttributes): string {
+    $attributes = $conditionAttributes($section, 'visible_when');
+
+    if ($attributes !== '') {
+        $attributes = ' data-conditional-section' . $attributes;
+    }
+
+    return $attributes;
+};
+
+$renderField = static function (array $field, string $name, string $id, $value) use ($rulesForField, $shellAttributes, $inputConditionAttributes): string {
     $key = (string) ($field['key'] ?? '');
     $label = (string) ($field['label'] ?? $key);
     $type = (string) ($field['type'] ?? 'text');
     $required = !empty($field['required']);
     $rules = $rulesForField($field);
+    $shellAttributesHtml = $shellAttributes($field);
+    $inputConditionAttributesHtml = $inputConditionAttributes($field);
     $validationAttributes = $rules !== ''
         ? ' data-validate="' . esc($rules) . '" data-label="' . esc($label) . '"'
         : ' data-label="' . esc($label) . '"';
+    $validationAttributes .= ' data-base-validate="' . esc($rules) . '"';
+    $validationAttributes .= $required ? ' data-static-required="1"' : ' data-static-required="0"';
+    $validationAttributes .= $inputConditionAttributesHtml;
     $requiredAttribute = $required ? ' required' : '';
     $help = trim((string) ($field['help'] ?? ''));
 
     if ($type === 'checkbox') {
-        return '<div class="form-group checkbox-group tax-checkbox">'
+        return '<div class="form-group checkbox-group tax-checkbox"' . $shellAttributesHtml . '>'
             . '<label>'
             . '<input type="checkbox" name="' . esc($name) . '" value="1"' . $validationAttributes . $requiredAttribute . ((int) $value === 1 ? ' checked' : '') . '>'
             . '<span>' . esc($label) . '</span>'
@@ -85,7 +131,7 @@ $renderField = static function (array $field, string $name, string $id, $value) 
             . '</div>';
     }
 
-    $html = '<div class="form-group">';
+    $html = '<div class="form-group"' . $shellAttributesHtml . '>';
     $html .= '<label for="' . esc($id) . '">' . esc($label) . '</label>';
 
     if ($type === 'select') {
@@ -108,6 +154,8 @@ $renderField = static function (array $field, string $name, string $id, $value) 
 
         if (($field['validation'] ?? '') === 'tax_number') {
             $formatAttributes = ' inputmode="numeric" maxlength="10" data-format="digits" data-max-digits="10" placeholder="10 számjegy"';
+        } elseif (($field['validation'] ?? '') === 'company_tax_number') {
+            $formatAttributes = ' inputmode="numeric" maxlength="13" data-format="company_tax_number" data-max-digits="11" placeholder="12345676-1-42"';
         } elseif (($field['validation'] ?? '') === 'tax_number_or_fetus') {
             $formatAttributes = ' maxlength="10" placeholder="10 számjegy vagy magzat"';
         } elseif ($type === 'number') {
@@ -243,7 +291,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                     <?php if (!is_array($section)) {
                         continue;
                     } ?>
-                    <section class="form-section">
+                    <section class="form-section"<?= $sectionAttributes($section) ?>>
                         <div class="section-copy">
                             <h2 class="form-section-title"><?= esc($section['title'] ?? 'Adatok') ?></h2>
                             <?php if (!empty($section['note'])): ?>
@@ -378,7 +426,146 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             }
         }
 
+        function inputByTaxField(form, fieldKey) {
+            var key = String(fieldKey || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+
+            return form.querySelector('[name="tax_fields[' + key + ']"]');
+        }
+
+        function inputValue(input) {
+            if (!input) {
+                return '';
+            }
+
+            if (input.type === 'checkbox' || input.type === 'radio') {
+                return input.checked ? String(input.value || '1') : '';
+            }
+
+            return String(input.value || '');
+        }
+
+        function conditionValues(element, kind) {
+            var values = kind === 'required'
+                ? element.dataset.requiredWhenValues
+                : element.dataset.visibleWhenValues;
+            var value = kind === 'required'
+                ? element.dataset.requiredWhenValue
+                : element.dataset.visibleWhenValue;
+
+            if (values) {
+                return String(values).split('|');
+            }
+
+            return [String(value || '')];
+        }
+
+        function conditionMatches(form, element, kind) {
+            var fieldKey = kind === 'required'
+                ? element.dataset.requiredWhenField
+                : element.dataset.visibleWhenField;
+
+            if (!fieldKey) {
+                return true;
+            }
+
+            return conditionValues(element, kind).indexOf(inputValue(inputByTaxField(form, fieldKey))) !== -1;
+        }
+
+        function setInputRules(input, rules) {
+            if (rules.length > 0) {
+                input.dataset.validate = rules.join('|');
+                return;
+            }
+
+            input.removeAttribute('data-validate');
+        }
+
+        function clearValidationState(input) {
+            var shell = input.closest('.form-group') || input.closest('.checkbox-group') || input.parentNode;
+            var error = shell ? shell.querySelector('.field-error') : null;
+
+            input.classList.remove('is-invalid', 'is-valid');
+
+            if (error) {
+                error.textContent = '';
+                error.hidden = true;
+            }
+        }
+
+        function applyConditionalInput(form, input) {
+            var shell = input.closest('[data-conditional-field]');
+            var visible = conditionMatches(form, input, 'visible');
+
+            if (shell) {
+                visible = visible && conditionMatches(form, shell, 'visible');
+                shell.hidden = !visible;
+            }
+
+            input.disabled = !visible;
+
+            if (!visible) {
+                input.required = false;
+                input.removeAttribute('required');
+                input.removeAttribute('data-validate');
+                clearValidationState(input);
+                return;
+            }
+
+            var baseRules = String(input.dataset.baseValidate || '').split('|').filter(Boolean);
+            var required = input.dataset.staticRequired === '1'
+                || !!(input.dataset.requiredWhenField && conditionMatches(form, input, 'required'));
+
+            if (required && baseRules.indexOf('required') === -1) {
+                baseRules.unshift('required');
+            }
+
+            input.required = required;
+
+            if (required) {
+                input.setAttribute('required', 'required');
+            } else {
+                input.removeAttribute('required');
+            }
+
+            setInputRules(input, baseRules);
+        }
+
+        function refreshConditionalFields(form) {
+            Array.prototype.slice.call(form.querySelectorAll('[data-conditional-section]')).forEach(function (section) {
+                section.hidden = !conditionMatches(form, section, 'visible');
+            });
+
+            Array.prototype.slice.call(form.querySelectorAll('[data-base-validate]')).forEach(function (input) {
+                applyConditionalInput(form, input);
+            });
+        }
+
+        function bindConditionalFields(form) {
+            if (form.dataset.conditionalFieldsBound === '1') {
+                return;
+            }
+
+            form.dataset.conditionalFieldsBound = '1';
+
+            ['input', 'change'].forEach(function (eventName) {
+                form.addEventListener(eventName, function (event) {
+                    if (!event.target || !/^tax_fields\[/.test(String(event.target.name || ''))) {
+                        return;
+                    }
+
+                    refreshConditionalFields(form);
+                    refreshValidation(form);
+                });
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('form.tax-form').forEach(function (form) {
+                bindConditionalFields(form);
+                refreshConditionalFields(form);
+                refreshValidation(form);
+            });
+
             document.querySelectorAll('[data-repeater]').forEach(function (section) {
                 updateRepeater(section);
 

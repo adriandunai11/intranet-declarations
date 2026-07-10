@@ -48,8 +48,24 @@ class TaxDeclarationSchemaService
                                 'amount' => 'Havi forintösszeget adok meg',
                                 'dependents' => 'Kedvezményezett eltartottak száma alapján kérem',
                             ], true),
-                            $this->number('monthly_amount', 'Havi összeg forintban', false, 'Csak akkor töltse, ha konkrét havi összeget szeretne megadni.'),
-                            $this->number('beneficiary_dependents_count', 'Kedvezményezett eltartottak száma', false),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('monthly_amount', 'Havi összeg forintban', false, 'Csak akkor töltse, ha konkrét havi összeget szeretne megadni.'),
+                                    'calculation_mode',
+                                    'amount'
+                                ),
+                                'calculation_mode',
+                                'amount'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('beneficiary_dependents_count', 'Kedvezményezett eltartottak száma', false),
+                                    'calculation_mode',
+                                    'dependents'
+                                ),
+                                'calculation_mode',
+                                'dependents'
+                            ),
                             $this->checkbox('foreign_discount_taken', 'Külföldi jövedelem után azonos vagy hasonló kedvezményt veszek igénybe'),
                             $this->checkbox('skip_contribution_discount', 'Nem kérem a családi járulékkedvezmény havi érvényesítését'),
                         ],
@@ -74,7 +90,15 @@ class TaxDeclarationSchemaService
                                 'alone' => 'Egyedül kérem',
                                 'shared' => 'Házastárssal megosztva kérem',
                             ], true),
-                            $this->number('monthly_amount', 'Havi összeg forintban', false),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('monthly_amount', 'Havi megosztott összeg forintban', false),
+                                    'claim_scope',
+                                    'shared'
+                                ),
+                                'claim_scope',
+                                'shared'
+                            ),
                         ],
                     ],
                     $this->spouseSection(true),
@@ -112,7 +136,15 @@ class TaxDeclarationSchemaService
                                 'full' => 'A kedvezmény teljes mellőzését kérem',
                                 'partial' => 'Csak egy megadott összeg felett kérem a mellőzést',
                             ], true),
-                            $this->number('monthly_limit', 'Havi összeghatár forintban', false),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('monthly_limit', 'Havi összeghatár forintban', false),
+                                    'waiver_scope',
+                                    'partial'
+                                ),
+                                'waiver_scope',
+                                'partial'
+                            ),
                         ],
                     ],
                 ],
@@ -163,7 +195,7 @@ class TaxDeclarationSchemaService
                 'sections' => [
                     [
                         'title' => 'Igénylés módja',
-                        'note' => 'A kitöltött adatokból a dokumentum sablon helyőrzői automatikusan tölthetők.',
+                        'note' => 'A kitöltött adatokból az online nyilatkozati összesítő automatikusan készül.',
                         'fields' => [
                             $this->select('claim_scope', 'Családi kedvezmény érvényesítése', [
                                 'alone' => 'Egyedül érvényesítem',
@@ -173,8 +205,24 @@ class TaxDeclarationSchemaService
                                 'amount' => 'Havi forintösszeget adok meg',
                                 'dependents' => 'Kedvezményezett eltartottak száma alapján kérem',
                             ], true),
-                            $this->number('monthly_amount', 'Havi családi kedvezmény forintban', false),
-                            $this->number('beneficiary_dependents_count', 'Kedvezményezett eltartottak száma', false),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('monthly_amount', 'Havi családi kedvezmény forintban', false),
+                                    'calculation_mode',
+                                    'amount'
+                                ),
+                                'calculation_mode',
+                                'amount'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('beneficiary_dependents_count', 'Kedvezményezett eltartottak száma', false),
+                                    'calculation_mode',
+                                    'dependents'
+                                ),
+                                'calculation_mode',
+                                'dependents'
+                            ),
                             $this->date('mother_discount_start', 'Anyák kedvezményének kezdete', false),
                             $this->checkbox('skip_contribution_discount', 'Nem kérem a családi járulékkedvezmény havi érvényesítését'),
                         ],
@@ -260,6 +308,34 @@ class TaxDeclarationSchemaService
     }
 
     /**
+     * @param array<string, mixed> $field
+     * @return array<string, mixed>
+     */
+    private function visibleWhen(array $field, string $fieldKey, string $value): array
+    {
+        $field['visible_when'] = [
+            'field' => $fieldKey,
+            'value' => $value,
+        ];
+
+        return $field;
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     * @return array<string, mixed>
+     */
+    private function requiredWhen(array $field, string $fieldKey, string $value): array
+    {
+        $field['required_when'] = [
+            'field' => $fieldKey,
+            'value' => $value,
+        ];
+
+        return $field;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function textarea(string $key, string $label, bool $required = false): array
@@ -277,18 +353,44 @@ class TaxDeclarationSchemaService
      */
     private function spouseSection(bool $required): array
     {
-        return [
+        $section = [
             'title' => 'Másik jogosult adatai',
             'note' => $required
                 ? 'Az első házasok kedvezményéhez a házastárs adatai kötelezőek.'
                 : 'Csak akkor töltse, ha a kedvezményt másik jogosulttal közösen érvényesíti.',
             'fields' => [
-                $this->text('spouse_name', 'Házastárs vagy élettárs neve', $required),
-                $this->text('spouse_tax_number', 'Házastárs vagy élettárs adóazonosító jele', $required, 'tax_number', '10 számjegy.'),
-                $this->text('spouse_employer_name', 'Másik jogosult munkáltatója', false),
-                $this->text('spouse_employer_tax_number', 'Másik jogosult munkáltatójának adószáma', false),
+                $this->spouseField($this->text('spouse_name', 'Házastárs vagy élettárs neve', $required), $required, true),
+                $this->spouseField($this->text('spouse_tax_number', 'Házastárs vagy élettárs adóazonosító jele', $required, 'tax_number', '10 számjegy.'), $required, true),
+                $this->spouseField($this->text('spouse_employer_name', 'Másik jogosult munkáltatója', false), $required, false),
+                $this->spouseField($this->text('spouse_employer_tax_number', 'Másik jogosult munkáltatójának adószáma', false, 'company_tax_number', '8 jegyű törzsszám vagy teljes adószám, pl. 12345676-1-42.'), $required, false),
             ],
         ];
+
+        if (!$required) {
+            $section['visible_when'] = [
+                'field' => 'claim_scope',
+                'value' => 'shared',
+            ];
+        }
+
+        return $section;
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     * @return array<string, mixed>
+     */
+    private function spouseField(array $field, bool $alwaysVisible, bool $requiredWhenShared): array
+    {
+        if ($alwaysVisible) {
+            return $field;
+        }
+
+        if ($requiredWhenShared) {
+            $field = $this->requiredWhen($field, 'claim_scope', 'shared');
+        }
+
+        return $this->visibleWhen($field, 'claim_scope', 'shared');
     }
 
     /**

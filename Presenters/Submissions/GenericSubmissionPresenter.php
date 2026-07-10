@@ -3,9 +3,17 @@
 namespace App\Modules\Declarations\Presenters\Submissions;
 
 use App\Modules\Declarations\Entities\DeclarationSubmission;
+use App\Modules\Declarations\Services\DeclarationSubmissionDataNormalizer;
 
 class GenericSubmissionPresenter implements SubmissionPresenterInterface
 {
+    private DeclarationSubmissionDataNormalizer $dataNormalizer;
+
+    public function __construct(?DeclarationSubmissionDataNormalizer $dataNormalizer = null)
+    {
+        $this->dataNormalizer = $dataNormalizer ?? new DeclarationSubmissionDataNormalizer();
+    }
+
     public function supports(string $templateCode): bool
     {
         return true;
@@ -13,12 +21,7 @@ class GenericSubmissionPresenter implements SubmissionPresenterInterface
 
     public function rows(DeclarationSubmission $submission): array
     {
-        $data = $submission->data_json ?? [];
-
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-            $data = is_array($decoded) ? $decoded : [];
-        }
+        $data = $this->dataNormalizer->normalize($submission->data_json ?? []);
 
         if (!is_array($data) || empty($data)) {
             return [

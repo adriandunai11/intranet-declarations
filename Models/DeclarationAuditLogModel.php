@@ -133,17 +133,8 @@ class DeclarationAuditLogModel extends Model
 
     public function findByPersonId(int $personId, int $limit = 50): array
     {
-        return $this->groupStart()
-            ->groupStart()
-                ->whereIn('entity_type', ['person', 'declaration_person'])
-                ->where('entity_id', $personId)
-            ->groupEnd()
-            ->orWhere('person_id', $personId)
-            ->orGroupStart()
-                ->whereIn('entity_type', ['employment_relation', 'declaration_employment_relation'])
-                ->where('person_id', $personId)
-            ->groupEnd()
-        ->groupEnd()
+        return $this->whereIn('entity_type', ['person', 'declaration_person'])
+            ->where('entity_id', $personId)
             ->orderBy('created_at', 'DESC')
             ->limit($limit)
             ->findAll();

@@ -3,9 +3,17 @@
 namespace App\Modules\Declarations\Presenters\Submissions;
 
 use App\Modules\Declarations\Entities\DeclarationSubmission;
+use App\Modules\Declarations\Services\DeclarationSubmissionDataNormalizer;
 
 class PersonalDataSubmissionPresenter implements SubmissionPresenterInterface
 {
+    private DeclarationSubmissionDataNormalizer $dataNormalizer;
+
+    public function __construct(?DeclarationSubmissionDataNormalizer $dataNormalizer = null)
+    {
+        $this->dataNormalizer = $dataNormalizer ?? new DeclarationSubmissionDataNormalizer();
+    }
+
     public function supports(string $templateCode): bool
     {
         return $templateCode === 'personal_data_statement';
@@ -28,23 +36,7 @@ class PersonalDataSubmissionPresenter implements SubmissionPresenterInterface
 
     private function data(DeclarationSubmission $submission): array
     {
-        $data = $submission->data_json ?? [];
-
-        if ($data instanceof \stdClass) {
-            $data = (array) $data;
-        }
-
-        if (is_string($data)) {
-            $decoded = json_decode($data, true);
-
-            if (is_string($decoded)) {
-                $decoded = json_decode($decoded, true);
-            }
-
-            $data = is_array($decoded) ? $decoded : [];
-        }
-
-        return is_array($data) ? $data : [];
+        return $this->dataNormalizer->normalize($submission->data_json ?? []);
     }
 
     private function value(array $data, string $key): string

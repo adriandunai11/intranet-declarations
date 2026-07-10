@@ -55,7 +55,7 @@ class AuditController extends AdminBaseController
                 $this->auditLogModel->findByPersonId($personId, 200)
             ),
             'tableId' => 'personAuditLogTable',
-            'emptyText' => 'Még nincs személyhez vagy jogviszonyhoz tartozó naplózott esemény.',
+            'emptyText' => 'Még nincs személyhez tartozó naplózott esemény.',
         ]);
     }
 

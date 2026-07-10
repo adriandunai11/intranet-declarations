@@ -234,6 +234,10 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: rgba(18
 .review-data-list div { border: 1px solid rgba(185, 203, 184, .65); border-radius: 14px; background: var(--surface-soft); padding: 10px 12px; }
 .review-data-list dt { margin: 0; color: #8a97aa; font-size: 12px; font-weight: 950; }
 .review-data-list dd { margin: 3px 0 0; font-size: 14px; font-weight: 900; overflow-wrap: anywhere; }
+.task-summary-list { margin-top: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.task-summary-list div { padding: 8px 10px; border-radius: 10px; }
+.task-summary-list dt { font-size: 11px; }
+.task-summary-list dd { font-size: 13px; font-weight: 850; }
 .final-submit-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .55fr); gap: 18px; align-items: start; border-left: 6px solid var(--primary); }
 .final-submit-card h2 { margin: 8px 0 6px; font-size: 22px; font-weight: 950; }
 .review-final-form { margin: 0; }
@@ -300,4 +304,681 @@ input.is-invalid, textarea.is-invalid, select.is-invalid { border-color: rgba(18
     .submitted-side h1 { font-size: 1.8rem; }
     .tax-repeater-title-row, .tax-repeater-row-head { align-items: stretch; flex-direction: column; }
     .tax-repeater-title-row .btn, .tax-repeater-row-head .btn { width: 100%; }
+}
+
+/* Mobile-first refinements for the tax declaration form */
+.tax-form-layout {
+    width: min(100%, 1180px);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+}
+
+.tax-form-layout .form-context-panel,
+.tax-form-layout .content-card,
+.tax-form-layout .form-section {
+    border-radius: 14px;
+}
+
+.tax-form-layout .form-context-panel {
+    position: static;
+    border-left-width: 1px;
+    border-top: 5px solid var(--primary);
+    padding: 14px;
+}
+
+.tax-form-layout .form-context-panel h1 {
+    margin: 10px 0 10px;
+    font-size: clamp(1.45rem, 8vw, 2rem);
+    line-height: 1.08;
+    letter-spacing: -.03em;
+}
+
+.tax-form-layout .form-context-panel p,
+.tax-form-layout .section-note {
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.tax-form-layout .helper-card {
+    margin: 12px 0;
+    padding-top: 12px;
+}
+
+.tax-form-layout .helper-card:last-of-type {
+    display: none;
+}
+
+.tax-form-layout .tax-auto-list div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+}
+
+.tax-form-layout .tax-auto-list dt {
+    line-height: 1.2;
+}
+
+.tax-form-layout .tax-auto-list dd {
+    min-width: 0;
+}
+
+.tax-form-layout .content-card {
+    padding: 12px;
+}
+
+.tax-form-layout .content-card > .section-heading {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(185, 203, 184, .55);
+}
+
+.tax-form-layout .content-card > .section-heading h2 {
+    font-size: clamp(1.2rem, 6vw, 1.55rem);
+}
+
+.tax-form-layout .form-progress {
+    padding: 12px;
+    border-radius: 14px;
+}
+
+.tax-form-layout .form-progress-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.tax-form-layout .form-section {
+    padding: 14px;
+}
+
+.tax-form-layout .form-section-title {
+    font-size: clamp(1.18rem, 5.5vw, 1.45rem);
+    line-height: 1.15;
+}
+
+.tax-form-layout .form-grid-2,
+.tax-form-layout .tax-repeater-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.tax-form-layout .form-grid,
+.tax-form-layout .tax-repeater-grid {
+    gap: 12px;
+}
+
+.tax-form-layout .form-group {
+    min-width: 0;
+    margin-bottom: 12px;
+}
+
+.tax-form-layout label {
+    font-size: 13px;
+    line-height: 1.35;
+}
+
+.tax-form-layout input[type="text"],
+.tax-form-layout input[type="email"],
+.tax-form-layout input[type="date"],
+.tax-form-layout input[type="number"],
+.tax-form-layout textarea,
+.tax-form-layout select {
+    min-width: 0;
+    min-height: 46px;
+    border-radius: 12px;
+    padding: 10px 12px;
+    font-size: 16px;
+}
+
+.tax-form-layout .checkbox-group label {
+    min-height: 46px;
+    border-radius: 12px;
+    padding: 11px 12px;
+}
+
+.tax-form-layout .tax-repeater-title-row,
+.tax-form-layout .tax-repeater-row-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tax-form-layout .tax-repeater-title-row .btn,
+.tax-form-layout .tax-repeater-row-head .btn {
+    width: 100%;
+}
+
+.tax-form-layout .tax-repeater-row {
+    border-radius: 14px;
+    padding: 12px;
+}
+
+.tax-form-layout .form-actions-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.tax-form-layout .form-actions-row .btn {
+    width: 100%;
+}
+
+@media (min-width: 640px) {
+    .tax-form-layout {
+        gap: 16px;
+    }
+
+    .tax-form-layout .form-context-panel,
+    .tax-form-layout .content-card,
+    .tax-form-layout .form-section {
+        border-radius: 16px;
+    }
+
+    .tax-form-layout .content-card,
+    .tax-form-layout .form-section {
+        padding: 16px;
+    }
+
+    .tax-form-layout .form-progress-head,
+    .tax-form-layout .tax-repeater-title-row,
+    .tax-form-layout .tax-repeater-row-head {
+        align-items: center;
+        flex-direction: row;
+    }
+
+    .tax-form-layout .tax-repeater-title-row .btn,
+    .tax-form-layout .tax-repeater-row-head .btn {
+        width: auto;
+    }
+
+    .tax-form-layout .form-grid-2,
+    .tax-form-layout .tax-repeater-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tax-form-layout .form-actions-row {
+        display: flex;
+    }
+
+    .tax-form-layout .form-actions-row .btn {
+        width: auto;
+    }
+}
+
+@media (min-width: 1024px) {
+    .tax-form-layout {
+        grid-template-columns: minmax(260px, 300px) minmax(0, 1fr);
+        gap: 20px;
+        align-items: start;
+    }
+
+    .tax-form-layout .form-context-panel {
+        position: sticky;
+        top: 86px;
+        border-top-width: 1px;
+        border-left-width: 6px;
+        padding: 18px;
+    }
+
+    .tax-form-layout .form-context-panel h1 {
+        font-size: clamp(1.42rem, 1.6vw, 1.75rem);
+    }
+
+    .tax-form-layout .helper-card:last-of-type {
+        display: block;
+    }
+
+    .tax-form-layout .content-card {
+        padding: 16px;
+    }
+
+    .tax-form-layout .content-card > .section-heading {
+        margin-bottom: 14px;
+    }
+
+    .tax-form-layout .form-grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .tax-form-layout .tax-repeater-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1280px) {
+    .tax-form-layout {
+        width: min(100%, 1220px);
+        grid-template-columns: minmax(280px, 320px) minmax(0, 1fr);
+    }
+
+    .tax-form-layout .tax-repeater-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Global mobile-first responsive pass for the public declaration UI */
+.topbar-inner {
+    padding: 10px 12px;
+    align-items: flex-start;
+    flex-direction: column;
+}
+
+.brand {
+    width: 100%;
+    gap: 10px;
+}
+
+.brand-logo-img {
+    width: 96px;
+}
+
+.brand-name {
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+.brand-subtitle {
+    font-size: 12px;
+}
+
+.security-pill {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+}
+
+.main {
+    padding: 16px 10px 28px;
+}
+
+.container,
+.portal-layout,
+.form-layout,
+.access-layout,
+.submitted-layout,
+.review-layout,
+.wizard-shell {
+    width: 100%;
+}
+
+.portal-layout,
+.form-layout:not(.tax-form-layout),
+.access-layout,
+.submitted-layout,
+.review-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+}
+
+.portal-sidebar,
+.form-layout:not(.tax-form-layout) .form-context-panel,
+.access-side,
+.submitted-side,
+.review-side {
+    position: static;
+}
+
+.sidebar-card,
+.content-card,
+.page-title-panel,
+.form-layout:not(.tax-form-layout) .form-context-panel,
+.access-side,
+.form-layout:not(.tax-form-layout) .form-section,
+.submitted-side,
+.submitted-card,
+.review-side,
+.review-document-card,
+.final-submit-card,
+.primary-next-card,
+.data-review-card,
+.summary-card {
+    border-radius: 14px;
+}
+
+.sidebar-card,
+.content-card,
+.page-title-panel,
+.form-layout:not(.tax-form-layout) .form-section,
+.submitted-card,
+.review-side,
+.review-document-card,
+.final-submit-card,
+.primary-next-card,
+.data-review-card {
+    padding: 14px;
+}
+
+.sidebar-card-primary,
+.form-layout:not(.tax-form-layout) .form-context-panel,
+.access-side,
+.submitted-side,
+.review-side {
+    border-left-width: 1px;
+    border-top: 5px solid var(--primary);
+}
+
+.page-title-panel,
+.primary-next-card,
+.section-heading,
+.submitted-head,
+.review-document-head {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.page-title-panel {
+    min-height: 0;
+    padding: 16px;
+}
+
+.page-title-panel h1 {
+    font-size: clamp(1.65rem, 8vw, 2.1rem);
+}
+
+.lead,
+.section-note,
+.sidebar-copy,
+.form-context-panel p,
+.access-side p,
+.submitted-help,
+.submitted-head p,
+.review-side p,
+.review-document-head p {
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.primary-next-card .btn,
+.section-heading .btn,
+.review-document-actions .btn,
+.review-document-actions form,
+.review-document-actions form .btn,
+.task-side .btn,
+.task-side form,
+.task-side form .btn,
+.declaration-side .btn,
+.declaration-side form,
+.declaration-side form .btn {
+    width: 100%;
+}
+
+.task-item,
+.declaration-item,
+.optional-item {
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    padding: 12px;
+    border-radius: 14px;
+}
+
+.task-main,
+.declaration-main,
+.optional-main {
+    min-width: 0;
+}
+
+.task-side,
+.declaration-side,
+.task-side-horizontal {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+    flex-direction: column;
+}
+
+.form-grid-2,
+.stats-grid,
+.overview-grid,
+.feature-grid,
+.step-strip,
+.review-data-list,
+.task-summary-list,
+.tax-auto-list div {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.form-actions-row,
+.confirm-dialog-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.form-actions-row .btn,
+.confirm-dialog-actions .btn {
+    width: 100%;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="date"],
+input[type="number"],
+textarea,
+select {
+    min-width: 0;
+    font-size: 16px;
+}
+
+.checkbox-group label {
+    min-width: 0;
+}
+
+.submitted-side h1,
+.review-side h1,
+.form-context-panel h1,
+.access-side h1 {
+    font-size: clamp(1.45rem, 7vw, 1.9rem);
+}
+
+.submitted-head h2 {
+    font-size: clamp(1.45rem, 7vw, 1.9rem);
+}
+
+.data-review-list div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+}
+
+.review-document-actions {
+    justify-content: stretch;
+}
+
+.final-submit-card {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.access-layout-narrow {
+    max-width: 920px;
+}
+
+@media (min-width: 640px) {
+    .topbar-inner {
+        padding: 12px 16px;
+        align-items: center;
+        flex-direction: row;
+    }
+
+    .brand {
+        width: auto;
+    }
+
+    .brand-logo-img {
+        width: 112px;
+    }
+
+    .brand-name {
+        font-size: 15px;
+    }
+
+    .security-pill {
+        width: auto;
+        white-space: nowrap;
+    }
+
+    .main {
+        padding: 22px 16px 34px;
+    }
+
+    .sidebar-card,
+    .content-card,
+    .page-title-panel,
+    .form-layout:not(.tax-form-layout) .form-section,
+    .submitted-card,
+    .review-side,
+    .review-document-card,
+    .final-submit-card,
+    .primary-next-card,
+    .data-review-card {
+        padding: 16px;
+    }
+
+    .page-title-panel,
+    .primary-next-card,
+    .section-heading,
+    .submitted-head,
+    .review-document-head {
+        align-items: flex-start;
+        flex-direction: row;
+    }
+
+    .form-grid-2,
+    .review-data-list,
+    .task-summary-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .data-review-list div {
+        grid-template-columns: minmax(150px, .38fr) minmax(0, 1fr);
+        gap: 16px;
+    }
+
+    .form-actions-row,
+    .confirm-dialog-actions {
+        display: flex;
+    }
+
+    .form-actions-row .btn,
+    .confirm-dialog-actions .btn {
+        width: auto;
+    }
+}
+
+@media (min-width: 900px) {
+    .main {
+        padding: 26px 18px 38px;
+    }
+
+    .portal-layout {
+        grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .form-layout:not(.tax-form-layout),
+    .access-layout,
+    .review-layout {
+        grid-template-columns: minmax(260px, 310px) minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .submitted-layout {
+        grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .portal-sidebar,
+    .form-layout:not(.tax-form-layout) .form-context-panel,
+    .access-side,
+    .submitted-side,
+    .review-side {
+        position: sticky;
+        top: 86px;
+    }
+
+    .sidebar-card-primary,
+    .form-layout:not(.tax-form-layout) .form-context-panel,
+    .access-side,
+    .submitted-side,
+    .review-side {
+        border-top-width: 1px;
+        border-left-width: 6px;
+    }
+
+    .task-item,
+    .declaration-item,
+    .optional-item {
+        grid-template-columns: 14px minmax(0, 1fr) auto;
+        align-items: center;
+        padding: 14px 16px;
+    }
+
+    .task-side,
+    .declaration-side {
+        grid-column: auto;
+        width: auto;
+        min-width: 126px;
+        align-items: flex-end;
+    }
+
+    .task-side-horizontal {
+        grid-column: auto;
+        width: auto;
+        min-width: min(360px, 42vw);
+        align-items: center;
+        justify-content: flex-end;
+        flex-direction: row;
+    }
+
+    .primary-next-card .btn,
+    .section-heading .btn,
+    .review-document-actions .btn,
+    .review-document-actions form,
+    .review-document-actions form .btn,
+    .task-side .btn,
+    .task-side form,
+    .task-side form .btn,
+    .declaration-side .btn,
+    .declaration-side form,
+    .declaration-side form .btn {
+        width: auto;
+    }
+
+    .final-submit-card {
+        grid-template-columns: minmax(0, 1fr) minmax(300px, .55fr);
+    }
+}
+
+@media (min-width: 1180px) {
+    .topbar-inner {
+        padding: 12px 20px;
+    }
+
+    .brand-logo-img {
+        width: 118px;
+    }
+
+    .main {
+        padding: 28px 20px 40px;
+    }
+
+    .portal-layout {
+        grid-template-columns: 330px minmax(0, 1fr);
+        gap: 22px;
+    }
+
+    .form-layout:not(.tax-form-layout) {
+        grid-template-columns: 340px minmax(0, 1fr);
+        gap: 22px;
+    }
+
+    .review-layout {
+        grid-template-columns: 330px minmax(0, 1fr);
+        gap: 22px;
+    }
+
+    .submitted-layout {
+        grid-template-columns: minmax(420px, 460px) minmax(0, 1fr);
+        gap: 22px;
+    }
 }

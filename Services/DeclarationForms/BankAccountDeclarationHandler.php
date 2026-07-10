@@ -32,7 +32,7 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
     {
         return [
             'account_holder' => 'required|min_length[3]|max_length[190]',
-            'bank_name' => 'required|min_length[2]|max_length[190]',
+            'bank_name' => 'permit_empty|min_length[2]|max_length[190]',
             'bank_account_number' => 'required|min_length[16]|max_length[35]',
             'confirm_truth' => 'required',
         ];
@@ -40,10 +40,17 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
 
     public function normalize(array $input): array
     {
+        $bankAccountNumber = preg_replace('/[^0-9]/', '', (string) ($input['bank_account_number'] ?? '')) ?? '';
+        $bankName = trim((string) ($input['bank_name'] ?? ''));
+
+        if ($bankName === '') {
+            $bankName = $this->identifierValidator->bankNameForHungarianBankAccountNumber($bankAccountNumber) ?? '';
+        }
+
         return [
             'account_holder' => trim((string) ($input['account_holder'] ?? '')),
-            'bank_name' => trim((string) ($input['bank_name'] ?? '')),
-            'bank_account_number' => preg_replace('/[^0-9]/', '', (string) ($input['bank_account_number'] ?? '')),
+            'bank_name' => $bankName,
+            'bank_account_number' => $bankAccountNumber,
             'confirm_truth' => !empty($input['confirm_truth']) ? 1 : 0,
         ];
     }
@@ -58,6 +65,10 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
 
         if (!$this->identifierValidator->isValidHungarianBankAccountNumber((string) ($data['bank_account_number'] ?? ''))) {
             throw new RuntimeException('A bankszámlaszám ellenőrző száma hibás.');
+        }
+
+        if (trim((string) ($data['bank_name'] ?? '')) === '') {
+            throw new RuntimeException('A bank nevét add meg, ha a bankszámlaszám elejéből nem ismerhető fel automatikusan.');
         }
 
         if ((int) ($data['confirm_truth'] ?? 0) !== 1) {
