@@ -64,6 +64,57 @@ class DeclarationTemplate extends Entity
         return trim($name);
     }
 
+    /**
+     * @return array<string, mixed>
+     */
+    public function details(): array
+    {
+        $raw = (string) ($this->attributes['details_json'] ?? '');
+
+        if ($raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    public function detail(string $key, $default = null)
+    {
+        $details = $this->details();
+
+        return array_key_exists($key, $details) ? $details[$key] : $default;
+    }
+
+    public function longDescription(): string
+    {
+        $details = $this->details();
+
+        return trim((string) ($details['long_description'] ?? $this->attributes['description'] ?? ''));
+    }
+
+    public function shortDescription(): string
+    {
+        $details = $this->details();
+
+        return trim((string) ($details['short_description'] ?? $this->attributes['description'] ?? ''));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function keywords(): array
+    {
+        $keywords = $this->detail('keywords', []);
+
+        if (!is_array($keywords)) {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('strval', $keywords)));
+    }
+
     public function isActive(): bool
     {
         return (bool) ($this->attributes['is_active'] ?? false);
