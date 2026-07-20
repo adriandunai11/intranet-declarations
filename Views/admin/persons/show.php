@@ -21,18 +21,34 @@
 
 <section class="content">
     <?php
-    $selfServiceRelationCount = 0;
+    $openRelationCount = 0;
+    $linkedIntranetUser = $linkedIntranetUser ?? null;
+    $intranetUserCandidates = $intranetUserCandidates ?? [];
+    $openPacketRelationIds = $openPacketRelationIds ?? [];
+    $openPacketCompanyIds = $openPacketCompanyIds ?? [];
+    $draftPacketsByRelationId = $draftPacketsByRelationId ?? [];
+    $personStatusLabels = [
+        'active' => ['Aktív', 'success'],
+        'inactive' => ['Inaktív', 'secondary'],
+        'blocked' => ['Letiltva', 'danger'],
+        'merged' => ['Összevonva', 'dark'],
+    ];
+    $packetStatusLabels = [
+        'draft' => ['Előkészítés alatt', 'secondary'],
+        'sent' => ['Kiküldve', 'info'],
+        'in_progress' => ['Kitöltés alatt', 'warning'],
+        'submitted' => ['Ellenőrzésre vár', 'primary'],
+        'approved' => ['Elfogadva', 'success'],
+        'completed' => ['Elfogadva', 'success'],
+        'closed' => ['Lezárva', 'dark'],
+        'cancelled' => ['Törölve', 'danger'],
+    ];
 
     foreach ($relations as $relation) {
         $relationIsClosed = in_array((string) $relation->status, ['closed', 'cancelled'], true);
-        $relationIntranetUserId = (int) ($relation->intranet_user_id ?? 0);
 
-        if (
-            !$relationIsClosed
-            && !empty($person->intranet_user_id)
-            && ($relationIntranetUserId === 0 || $relationIntranetUserId === (int) $person->intranet_user_id)
-        ) {
-            $selfServiceRelationCount++;
+        if (!$relationIsClosed) {
+            $openRelationCount++;
         }
     }
     ?>
@@ -82,7 +98,14 @@
                     <p class="text-muted"><?= esc($person->phone ?: '-') ?></p>
 
                     <strong>Állapot</strong>
-                    <p class="text-muted"><?= esc($person->status ?: '-') ?></p>
+                    <p>
+                        <?php
+                        [$personStatusLabel, $personStatusClass] = $personStatusLabels[(string) ($person->status ?? '')] ?? [$person->status ?: '-', 'secondary'];
+                        ?>
+                        <span class="badge badge-<?= esc($personStatusClass) ?>">
+                            <?= esc($personStatusLabel) ?>
+                        </span>
+                    </p>
                 </div>
             </div>
 
@@ -94,9 +117,63 @@
                 </div>
                 <div class="card-body">
                     <?php if (empty($person->intranet_user_id)): ?>
-                        <div class="alert alert-warning mb-0">
+                        <div class="alert alert-warning">
                             A személy nincs intranet felhasználóhoz kötve, ezért saját nyilatkozatindítást még nem tud használni.
                         </div>
+
+                        <?php if (!empty($intranetUserCandidates)): ?>
+                            <p class="text-muted">
+                                Találtunk aktív intranet felhasználót az Antra azonosító vagy e-mail cím alapján.
+                                E-mail egyezésnél kézi ellenőrzés szükséges, mert a nyilatkozati e-mail eltérhet az intranet fiók e-mail címétől.
+                            </p>
+
+                            <div class="list-group mb-3">
+                                <?php foreach ($intranetUserCandidates as $candidate): ?>
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <strong><?= esc($candidate['label']) ?></strong>
+                                                <div class="text-muted small">
+                                                    #<?= (int) $candidate['id'] ?>
+                                                    <?php if (!empty($candidate['antra_id'])): ?>
+                                                        · Antra: <?= esc($candidate['antra_id']) ?>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($candidate['email'])): ?>
+                                                        · <?= esc($candidate['email']) ?>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="text-muted small"><?= esc($candidate['reason']) ?></div>
+                                            </div>
+                                            <?= form_open('declarations/persons/' . (int) $person->id . '/intranet/link') ?>
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="user_id" value="<?= (int) $candidate['id'] ?>">
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                Kapcsolás
+                                            </button>
+                                            <?= form_close() ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted">
+                                Nincs egyértelmű aktív intranet user egyezés. Új user létrehozásakor a név, telefonszám és Antra azonosító kerül előtöltésre.
+                            </p>
+                        <?php endif; ?>
+
+                        <?php if (hasPermissions('declarations_persons_edit')): ?>
+                            <?= form_open('declarations/persons/' . (int) $person->id . '/intranet/user-add') ?>
+                            <?= csrf_field() ?>
+                            <button type="submit" class="btn btn-default">
+                                <i class="fas fa-user-plus pr-1"></i> Intranet user létrehozása
+                            </button>
+                            <?= form_close() ?>
+                            <div class="text-muted small mt-2">
+                                A users/add oldal nyílik meg, az ismert adatok szerveroldali előtöltéssel kerülnek át.
+                                A nyilatkozati e-mail címet nem töltjük be intranet user e-mailként.
+                                Létrehozás után az egyező aktív user itt kapcsolható a személyhez.
+                            </div>
+                        <?php endif; ?>
                     <?php else: ?>
                         <p>
                             <span class="badge badge-success">Intranethez kötve</span>
@@ -104,10 +181,20 @@
 
                         <dl class="row mb-3">
                             <dt class="col-sm-6">Felhasználó</dt>
-                            <dd class="col-sm-6">#<?= (int) $person->intranet_user_id ?></dd>
+                            <dd class="col-sm-6">
+                                #<?= (int) $person->intranet_user_id ?>
+                                <?php if ($linkedIntranetUser): ?>
+                                    <span class="d-block text-muted small">
+                                        <?= esc($linkedIntranetUser['label']) ?>
+                                        <?php if (!empty($linkedIntranetUser['email'])): ?>
+                                            · <?= esc($linkedIntranetUser['email']) ?>
+                                        <?php endif; ?>
+                                    </span>
+                                <?php endif; ?>
+                            </dd>
 
-                            <dt class="col-sm-6">Használható jogviszony</dt>
-                            <dd class="col-sm-6"><?= (int) $selfServiceRelationCount ?></dd>
+                            <dt class="col-sm-6">Nyitott jogviszony</dt>
+                            <dd class="col-sm-6"><?= (int) $openRelationCount ?></dd>
                         </dl>
 
                         <p class="text-muted mb-0">
@@ -154,10 +241,9 @@
                                 <thead>
                                     <tr>
                                         <th>Cég</th>
-                                        <th>Státusz</th>
+                                        <th>Folyamat</th>
                                         <th>Telephely</th>
                                         <th>Elsődleges toborzó</th>
-                                        <th>Intranet user</th>
                                         <th>Kezdés</th>
                                         <th>Lezárás</th>
                                         <th>Művelet</th>
@@ -167,19 +253,10 @@
                                     <?php foreach ($relations as $relation): ?>
                                         <?php
                                         $relationId = (int) $relation->id;
-                                        $companyYearKey = (int) $relation->company_id . ':' . (int) date('Y');
-                                        $hasSentPacket = !empty($sentPacketRelationIds[$relationId])
-                                            || !empty($sentPacketCompanyYearKeys[$companyYearKey]);
+                                        $hasOpenPacket = !empty($openPacketRelationIds[$relationId])
+                                            || !empty($openPacketCompanyIds[(int) $relation->company_id]);
                                         $draftPacket = $draftPacketsByRelationId[$relationId] ?? null;
                                         $isClosedRelation = in_array((string) $relation->status, ['closed', 'cancelled'], true);
-                                        $relationIntranetUserId = (int) ($relation->intranet_user_id ?? 0);
-                                        $selfServiceEnabledForRelation = !$isClosedRelation
-                                            && !empty($person->intranet_user_id)
-                                            && ($relationIntranetUserId === 0 || $relationIntranetUserId === (int) $person->intranet_user_id);
-                                        $selfServiceBlockedByOtherUser = !$isClosedRelation
-                                            && !empty($person->intranet_user_id)
-                                            && $relationIntranetUserId > 0
-                                            && $relationIntranetUserId !== (int) $person->intranet_user_id;
                                         ?>
                                         <tr>
                                             <td><?= esc($divisionNames[(int) $relation->company_id] ?? ('#' . $relation->company_id)) ?>
@@ -190,7 +267,7 @@
                                                     'draft' => ['Piszkozat', 'secondary'],
                                                     'onboarding' => ['Beléptetés alatt', 'primary'],
                                                     'invited' => ['Nyilatkozat kiküldve', 'info'],
-                                                    'in_progress' => ['Kitöltés folyamatban', 'warning'],
+                                                    'in_progress' => ['Nyilatkozat kitöltése alatt', 'warning'],
                                                     'declarations_submitted' => ['Nyilatkozatok ellenőrzésre várnak', 'primary'],
                                                     'completed' => ['Nyilatkozatok elfogadva', 'success'],
                                                     'active' => ['Aktív dolgozó', 'success'],
@@ -215,18 +292,15 @@
                                             <td>
                                                 <?= esc($recruiterDisplayNames[(int) $relation->primary_recruiter_user_id] ?? '-') ?>
                                             </td>
-                                            <td>
-                                                <?= !empty($relation->intranet_user_id) ? '#' . (int) $relation->intranet_user_id : '-' ?>
-                                            </td>
                                             <td><?= esc($relation->start_date ?: '-') ?></td>
                                             <td><?= esc($relation->end_date ?: '-') ?></td>
                                             <td>
-                                                <?php if ($hasSentPacket): ?>
-                                                    <span class="badge badge-info d-block mb-1">Csomag kiküldve</span>
-                                                <?php elseif ($draftPacket): ?>
+                                                <?php if ($draftPacket): ?>
                                                     <a href="<?= url('declarations/packets/' . $draftPacket->id) ?>" class="btn btn-sm btn-default">
                                                         <i class="fas fa-file-signature pr-1"></i> Piszkozat megnyitása
                                                     </a>
+                                                <?php elseif ($hasOpenPacket): ?>
+                                                    <span class="badge badge-info d-block mb-1">Nyitott csomag van</span>
                                                 <?php elseif (hasPermissions('declarations_packets_create') && !$isClosedRelation): ?>
                                                     <button type="button" class="btn btn-sm btn-default" data-toggle="modal"
                                                         data-target="#createPacketModal<?= $relationId ?>">
@@ -254,11 +328,6 @@
                                                     <?= form_close() ?>
                                                 <?php endif; ?>
 
-                                                <?php if ($selfServiceEnabledForRelation): ?>
-                                                    <span class="badge badge-success d-block mt-1">Saját indítás engedélyezve</span>
-                                                <?php elseif ($selfServiceBlockedByOtherUser): ?>
-                                                    <span class="badge badge-danger d-block mt-1">Más intranet felhasználóhoz kötve</span>
-                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endforeach; ?>
@@ -288,7 +357,7 @@
                                     <tr>
                                         <th>ID</th>
                                         <th>Jogviszony ID</th>
-                                        <th>Adóév</th>
+                                        <th>Nyilatkozati év</th>
                                         <th>Státusz</th>
                                         <th>Létrehozva</th>
                                     </tr>
@@ -308,7 +377,12 @@
                                                 <?= esc($packet->tax_year ?: '-') ?>
                                             </td>
                                             <td>
-                                                <?= esc($packet->status) ?>
+                                                <?php
+                                                [$packetStatusLabel, $packetStatusClass] = $packetStatusLabels[(string) ($packet->status ?? '')] ?? [$packet->status ?: '-', 'secondary'];
+                                                ?>
+                                                <span class="badge badge-<?= esc($packetStatusClass) ?>">
+                                                    <?= esc($packetStatusLabel) ?>
+                                                </span>
                                             </td>
                                             <td>
                                                 <?= esc($packet->created_at ?: '-') ?>
@@ -347,13 +421,12 @@
     <?php foreach ($relations as $relation): ?>
         <?php
         $relationId = (int) $relation->id;
-        $companyYearKey = (int) $relation->company_id . ':' . (int) date('Y');
-        $hasSentPacket = !empty($sentPacketRelationIds[$relationId])
-            || !empty($sentPacketCompanyYearKeys[$companyYearKey]);
+        $hasOpenPacket = !empty($openPacketRelationIds[$relationId])
+            || !empty($openPacketCompanyIds[(int) $relation->company_id]);
         $draftPacket = $draftPacketsByRelationId[$relationId] ?? null;
         $isClosedRelation = in_array((string) $relation->status, ['closed', 'cancelled'], true);
         ?>
-        <?php if ($hasSentPacket || $draftPacket || $isClosedRelation): ?>
+        <?php if ($hasOpenPacket || $draftPacket || $isClosedRelation): ?>
             <?php continue; ?>
         <?php endif; ?>
         <div class="modal fade" id="createPacketModal<?= (int) $relation->id ?>" role="dialog" data-backdrop="static"
@@ -375,22 +448,22 @@
                     <div class="modal-body">
                         <div class="row">
                             <div class="col-md-4 form-group">
-                                <label for="tax_year_<?= (int) $relation->id ?>">Adóév</label>
+                                <label for="tax_year_<?= (int) $relation->id ?>">Nyilatkozati év</label>
                                 <input type="number" name="tax_year" id="tax_year_<?= (int) $relation->id ?>" class="form-control"
                                     value="<?= (int) date('Y') ?>">
                             </div>
                         </div>
 
                         <div class="alert alert-info mb-3">
-                            Az alap beléptetési csomag automatikusan a kötelező, nem adóügyi nyilatkozatokat hozza létre.
-                            Az adóügyi nyilatkozatokat a beálló később opcionálisan választhatja, a munkaügy ellenőrzése mellett.
+                            Az alap beléptetési csomag a kötelező, nem adóügyi nyilatkozatokat hozza létre.
+                            Adóügyi nyilatkozatot csak akkor jelölj be, ha már most biztosan szükséges; egyébként a dolgozó később saját maga is indíthatja.
                         </div>
 
-                        <label class="mb-2">Aktív nyilatkozat sablonok</label>
+                        <label class="mb-2">Aktív nyilatkozatok</label>
 
                         <?php if (empty($templates)): ?>
                             <p class="text-muted">
-                                Nincs aktív nyilatkozat sablon.
+                                Nincs aktív nyilatkozat.
                             </p>
                         <?php else: ?>
                             <?php foreach ($templates as $template): ?>
@@ -418,7 +491,6 @@
                                         <?= esc($template->displayName()) ?>
                                         <small class="text-muted d-block">
                                             <?= esc($groupLabel) ?> · <?= esc($reviewLabel) ?>
-                                            <?= !empty($template->needs_signature) ? ' · Aláírandó' : '' ?>
                                         </small>
                                     </label>
                                 </div>
@@ -431,7 +503,7 @@
                             Alap beléptetési csomag létrehozása
                         </button>
                         <button type="submit" name="packet_mode" value="manual" class="btn btn-default">
-                            Kijelölt sablonokból létrehozás
+                            Kijelölt nyilatkozatokból létrehozás
                         </button>
                     </div>
 

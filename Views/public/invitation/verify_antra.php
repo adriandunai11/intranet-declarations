@@ -7,7 +7,7 @@
         <div class="eyebrow">Hozzáférés ellenőrzése</div>
         <h1>Antra azonosító</h1>
         <p>
-            A dokumentumok megnyitásához adja meg a toborzó által rögzített Antra azonosítót.
+            A nyilatkozatok megnyitásához adja meg az e-mailben szereplő Antra azonosítót.
         </p>
 
         <ul class="access-checklist">

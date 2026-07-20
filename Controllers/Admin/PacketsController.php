@@ -131,7 +131,7 @@ class PacketsController extends AdminBaseController
 
             return redirect()
                 ->to(url('declarations/packets/' . $packetId))
-                ->with('sSuccess', 'A nyilatkozat elutasítva. A beálló értesítése elindult.');
+                ->with('sSuccess', 'A nyilatkozat elutasítva. A kitöltő értesítése elindult.');
         } catch (Throwable $e) {
             $this->logFailure('packet_item_reject', $e);
 
@@ -168,7 +168,7 @@ class PacketsController extends AdminBaseController
 
             return redirect()
                 ->to(url('declarations/packets/' . $packetId))
-                ->with('sSuccess', 'A kijelölt nyilatkozatok elutasítva. A beálló egy összesítő e-mailt kapott.');
+                ->with('sSuccess', 'A kijelölt nyilatkozatok elutasítva. A kitöltő egy összesítő e-mailt kapott.');
         } catch (Throwable $e) {
             $this->logFailure('packet_items_reject_batch', $e);
 
@@ -254,7 +254,7 @@ class PacketsController extends AdminBaseController
                     $this->documentPreviewService->previewDataForPacketItem(
                         $packetId,
                         $itemId,
-                        'A PDF előnézet most nem állítható elő, ezért az online kitöltésből készített dokumentum-előnézet látható.'
+                        'A PDF előnézet most nem állítható elő, ezért az online kitöltésből készített nyilatkozat-előnézet látható.'
                     ),
                     [
                         'backUrl' => url('declarations/packets/' . $packetId),
@@ -312,7 +312,7 @@ class PacketsController extends AdminBaseController
 
             return redirect()
                 ->to(url('declarations/packets/' . $packetId))
-                ->with('sSuccess', 'A nyilatkozat javításra újranyitva. Szükség esetén küldj külön új meghívó linket a beállónak.');
+                ->with('sSuccess', 'A nyilatkozat javításra újranyitva. Szükség esetén küldj külön új meghívó linket a kitöltőnek.');
         } catch (Throwable $e) {
             $this->logFailure('packet_item_reopen_for_correction', $e);
 

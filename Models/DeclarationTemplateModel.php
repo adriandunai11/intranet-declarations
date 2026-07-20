@@ -28,7 +28,6 @@ class DeclarationTemplateModel extends Model
         'renewal_policy',
         'required_policy',
         'review_role',
-        'needs_signature',
         'is_candidate_selectable',
         'company_scope',
         'class_name',
@@ -51,7 +50,6 @@ class DeclarationTemplateModel extends Model
         'renewal_policy' => 'required|max_length[50]',
         'required_policy' => 'required|max_length[50]',
         'review_role' => 'required|max_length[50]',
-        'needs_signature' => 'permit_empty|in_list[0,1]',
         'is_candidate_selectable' => 'permit_empty|in_list[0,1]',
         'company_scope' => 'required|max_length[50]',
         'class_name' => 'permit_empty|max_length[255]',
@@ -60,23 +58,6 @@ class DeclarationTemplateModel extends Model
         'sort_order' => 'permit_empty|integer',
         'is_active' => 'permit_empty|in_list[0,1]',
     ];
-
-    public function findActive(): array
-    {
-        return $this->where('is_active', 1)
-            ->groupStart()
-                ->where('effective_from', null)
-                ->orWhere('effective_from <=', date('Y-m-d'))
-            ->groupEnd()
-            ->groupStart()
-                ->where('effective_to', null)
-                ->orWhere('effective_to >=', date('Y-m-d'))
-            ->groupEnd()
-            ->orderBy('category', 'ASC')
-            ->orderBy('sort_order', 'ASC')
-            ->orderBy('name', 'ASC')
-            ->findAll();
-    }
 
     public function findActiveForYear(?int $taxYear = null): array
     {
@@ -165,7 +146,9 @@ class DeclarationTemplateModel extends Model
     {
         $builder = $this->where('code', $code);
 
-        if ($taxYear !== null) {
+        if ($taxYear === null) {
+            $builder->where('tax_year IS NULL', null, false);
+        } else {
             $builder->where('tax_year', $taxYear);
         }
 

@@ -8,11 +8,17 @@
     <p>Kedves <?= esc($personName ?? '') ?>!</p>
 
     <p>
-        Az intranetes felületen nyilatkozat kitöltését indítottad el
-        <?= !empty($packet->tax_year) ? esc($packet->tax_year) . '. évre' : 'a saját adataidhoz kapcsolódóan' ?>.
+        Az intranetes felületen nyilatkozat kitöltését indított el.
     </p>
 
-    <p>A kitöltést az alábbi linken tudod folytatni:</p>
+    <p>A kitöltést az alábbi linken tudja folytatni:</p>
+
+    <?php if (!empty($antraId)): ?>
+        <p style="padding: 12px 14px; background: #f3f8f1; border: 1px solid #d9ead3; border-radius: 8px;">
+            A link megnyitásakor megadandó ANTRA azonosító:<br>
+            <strong style="font-size: 18px;"><?= esc($antraId) ?></strong>
+        </p>
+    <?php endif; ?>
 
     <p>
         <a href="<?= esc($invitationUrl ?? '') ?>" style="display: inline-block; padding: 10px 16px; background: #50b848; color: #fff; text-decoration: none; border-radius: 4px;">
@@ -21,12 +27,12 @@
     </p>
 
     <p style="font-size: 13px; color: #555;">
-        Ha a gomb nem működik, másold be ezt a linket a böngészőbe:<br>
+        Ha a gomb nem működik, másolja be ezt a linket a böngészőbe:<br>
         <?= esc($invitationUrl ?? '') ?>
     </p>
 
     <p>
-        A beküldés előtt lehetőséged lesz ellenőrizni a megadott adatokat.
+        A beküldés előtt lehetősége lesz ellenőrizni a megadott adatokat.
     </p>
 
     <p>Üdvözlettel:<br>Miell Group</p>

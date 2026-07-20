@@ -91,13 +91,9 @@ class EmploymentRelationService
             'company_id' => $companyId,
             'location_id' => $locationId,
             'location' => $locationName,
-            'intranet_user_id' => null,
             'primary_recruiter_user_id' => $primaryRecruiterUserId,
             'status' => EmploymentRelation::STATUS_ONBOARDING,
             'start_date' => $this->nullableString($data['start_date'] ?? null),
-            'previous_relation_id' => isset($data['previous_relation_id']) && $data['previous_relation_id'] !== ''
-                ? (int) $data['previous_relation_id']
-                : null,
             'created_by_user_id' => function_exists('logged') ? logged('id') : null,
         ];
 

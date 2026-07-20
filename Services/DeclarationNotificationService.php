@@ -2,7 +2,6 @@
 
 namespace App\Modules\Declarations\Services;
 
-use App\Modules\Declarations\Entities\DeclarationSubmission;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\EmploymentRelationModel;
@@ -32,11 +31,6 @@ class DeclarationNotificationService
         $this->recruiterService = new RecruiterService();
     }
 
-    public function notifyRejectedSubmission(object $item, DeclarationSubmission $submission, string $reviewNote): void
-    {
-        $this->notifyRejectedPacketItems((int) $submission->packet_id);
-    }
-
     public function notifyRejectedPacketItems(int $packetId): void
     {
         $packet = $this->packetModel->find($packetId);
@@ -48,7 +42,7 @@ class DeclarationNotificationService
         $person = $this->personModel->find((int) $packet->person_id);
 
         if (!$person || empty($person->email)) {
-            throw new RuntimeException('A beálló e-mail címe nem található az értesítéshez.');
+            throw new RuntimeException('A kitöltő e-mail címe nem található az értesítéshez.');
         }
 
         $personName = method_exists($person, 'fullName')
@@ -106,7 +100,7 @@ class DeclarationNotificationService
             null,
             null,
             null,
-            'Javítási összesítő e-mail kiküldve a beállónak.',
+            'Javítási összesítő e-mail kiküldve a kitöltőnek.',
             [
                 'person_id' => (int) $person->id,
                 'employment_relation_id' => (int) $packet->employment_relation_id,
@@ -230,7 +224,7 @@ class DeclarationNotificationService
         $person = $this->personModel->find((int) $packet->person_id);
 
         if (!$person || empty($person->email)) {
-            throw new RuntimeException('A beálló e-mail címe nem található az értesítéshez.');
+            throw new RuntimeException('A kitöltő e-mail címe nem található az értesítéshez.');
         }
 
         $personName = method_exists($person, 'fullName')
@@ -239,6 +233,7 @@ class DeclarationNotificationService
 
         $message = view('App\Modules\Declarations\Views\emails\invitation', [
             'personName' => $personName,
+            'antraId' => trim((string) ($person->antra_id ?? '')),
             'invitationUrl' => $invitationUrl,
         ]);
 
@@ -247,7 +242,7 @@ class DeclarationNotificationService
         $email = service('email');
         $email->setFrom($config->mailFromEmail, $config->mailFromName);
         $email->setTo($person->email);
-        $email->setSubject('Belépéshez szükséges dokumentumok kitöltése');
+        $email->setSubject('Belépéshez szükséges nyilatkozatok kitöltése');
         $email->setMessage($message);
         $email->setMailType('html');
 
@@ -265,7 +260,7 @@ class DeclarationNotificationService
             null,
             null,
             null,
-            'Meghívó e-mail kiküldve a beállónak.',
+            'Meghívó e-mail kiküldve a kitöltőnek.',
             [
                 'person_id' => (int) $person->id,
                 'email' => $person->email,
@@ -299,6 +294,7 @@ class DeclarationNotificationService
 
         $message = view('App\Modules\Declarations\Views\emails\employee_self_service_invitation', [
             'personName' => $personName,
+            'antraId' => trim((string) ($person->antra_id ?? '')),
             'invitationUrl' => $invitationUrl,
             'packet' => $packet,
         ]);
@@ -308,7 +304,7 @@ class DeclarationNotificationService
         $email = service('email');
         $email->setFrom($config->mailFromEmail, $config->mailFromName);
         $email->setTo($person->email);
-        $email->setSubject('Nyilatkozat kitöltése - ' . (string) ($packet->tax_year ?: date('Y')));
+        $email->setSubject('Nyilatkozat kitöltése');
         $email->setMessage($message);
         $email->setMailType('html');
 

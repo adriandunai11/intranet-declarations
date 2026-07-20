@@ -61,13 +61,13 @@ class MyDeclarationsController extends AdminBaseController
                 );
 
                 return redirect()
-                    ->to(url('my-declarations'))
+                    ->to(url('declarations/my-declarations'))
                     ->with('sSuccess', 'A nyilatkozat kitöltési link elkészült és e-mailben kiküldtük.');
             } catch (Throwable $mailError) {
                 log_message('error', 'Employee self-service invitation mail failed: ' . $mailError->getMessage());
 
                 return redirect()
-                    ->to(url('my-declarations'))
+                    ->to(url('declarations/my-declarations'))
                     ->with('sError', 'A csomag elkészült, de az e-mail küldés nem sikerült. Ideiglenes kitöltési link: ' . (string) $result['url']);
             }
         } catch (Throwable $e) {
@@ -75,7 +75,7 @@ class MyDeclarationsController extends AdminBaseController
             log_message('error', $e->getTraceAsString());
 
             return redirect()
-                ->to(url('my-declarations'))
+                ->to(url('declarations/my-declarations'))
                 ->withInput()
                 ->with('sError', $e->getMessage());
         }

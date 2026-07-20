@@ -26,9 +26,7 @@ class EmploymentRelation extends Entity
         'id' => 'integer',
         'person_id' => 'integer',
         'company_id' => 'integer',
-        'intranet_user_id' => '?integer',
         'primary_recruiter_user_id' => '?integer',
-        'previous_relation_id' => '?integer',
         'created_by_user_id' => '?integer',
         'location_id' => 'integer',
     ];

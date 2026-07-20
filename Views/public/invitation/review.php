@@ -5,8 +5,7 @@
 <?php
 $items = $items ?? [];
 $summaryRowsByItemId = $summaryRowsByItemId ?? [];
-$packetStatus = (string) ($packet->status ?? '');
-$canModifyItems = in_array($packetStatus, ['draft', 'sent', 'in_progress'], true);
+$removableItemIds = $removableItemIds ?? [];
 
 $previewUrlFor = static function (object $item) use ($startUrl): string {
     return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/preview';
@@ -14,6 +13,52 @@ $previewUrlFor = static function (object $item) use ($startUrl): string {
 
 $removeUrlFor = static function (object $item) use ($startUrl): string {
     return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/remove';
+};
+
+$templateValue = static function (object $template, array $keys): string {
+    foreach ($keys as $key) {
+        $value = trim((string) ($template->{$key} ?? ''));
+
+        if ($value !== '') {
+            return $value;
+        }
+    }
+
+    return '';
+};
+
+$categoryLabel = static function (string $category): string {
+    return [
+        'tax_advance' => 'Adóügy',
+        'payroll' => 'Bérszámfejtés',
+        'employment' => 'Munkaügy',
+        'onboarding' => 'Beléptetés',
+        'personal_data' => 'Személyes adatok',
+        'gdpr' => 'Adatvédelem',
+        'work_safety' => 'Munkavédelem',
+        'company_policy' => 'Szabályzat',
+        'travel_cost' => 'Utazási költség',
+    ][$category] ?? 'Nyilatkozat';
+};
+
+$isTaxTemplate = static function (object $template) use ($templateValue): bool {
+    return $templateValue($template, ['template_declaration_group', 'declaration_group']) === 'tax'
+        || $templateValue($template, ['template_category', 'category']) === 'tax_advance';
+};
+
+$templateTaxYear = static function (object $template) use ($templateValue, $packet): string {
+    return $templateValue($template, ['template_tax_year', 'tax_year'])
+        ?: (string) ($packet->tax_year ?? date('Y'));
+};
+
+$templateMetaText = static function (object $template) use ($templateValue, $categoryLabel, $isTaxTemplate, $templateTaxYear): string {
+    $parts = [$categoryLabel($templateValue($template, ['template_category', 'category']))];
+
+    if ($isTaxTemplate($template)) {
+        $parts[] = 'Adóév: ' . $templateTaxYear($template);
+    }
+
+    return implode(' · ', array_filter($parts));
 };
 ?>
 
@@ -56,27 +101,23 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
 
         <section class="content-card review-documents-card">
             <?php if (empty($items)): ?>
-                <div class="notice notice-warning">Ehhez a csomaghoz jelenleg nincs ellenőrizhető dokumentum.</div>
+                <div class="notice notice-warning">Ehhez a csomaghoz jelenleg nincs ellenőrizhető nyilatkozat.</div>
             <?php else: ?>
                 <div class="review-document-list">
                     <?php foreach ($items as $item): ?>
                         <?php
                         $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
                         $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
-                        $canRemoveCandidateSelected = $canModifyItems
-                            && (int) ($item->template_is_candidate_selectable ?? 0) === 1
-                            && (string) ($item->status ?? '') !== 'accepted';
+                        $canRemoveCandidateSelected = !empty($removableItemIds[(int) $item->id]);
                         $itemUrl = $itemUrls[(int) $item->id] ?? '#';
                         ?>
 
                         <article class="review-document-card">
                             <header class="review-document-head">
                                 <div>
-                                    <h2><?= esc($item->template_name ?: ('Dokumentum #' . $item->template_id)) ?></h2>
+                                    <h2><?= esc($item->template_name ?: ('Nyilatkozat #' . $item->template_id)) ?></h2>
                                     <p>
-                                        <?= esc($item->template_category ?: 'Dokumentum') ?>
-                                        <?php if (!empty($item->template_tax_year)): ?> · Adóév: <?= esc($item->template_tax_year) ?><?php endif; ?>
-                                        <?php if (!empty($item->template_version)): ?> · Verzió: <?= esc($item->template_version) ?><?php endif; ?>
+                                        <?= esc($templateMetaText($item)) ?>
                                     </p>
                                 </div>
                                 <div class="review-document-actions">
@@ -95,7 +136,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                             </header>
 
                             <?php if (empty($summaryRows)): ?>
-                                <div class="empty-state">Ehhez a dokumentumhoz nincs megjeleníthető mentett adat.</div>
+                                <div class="empty-state">Ehhez a nyilatkozathoz nincs megjeleníthető mentett adat.</div>
                             <?php else: ?>
                                 <dl class="review-data-list">
                                     <?php foreach ($summaryRows as $label => $value): ?>

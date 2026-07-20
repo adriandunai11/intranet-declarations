@@ -17,14 +17,12 @@ class EmploymentRelationModel extends Model
     protected $allowedFields = [
         'person_id',
         'company_id',
-        'intranet_user_id',
         'primary_recruiter_user_id',
         'status',
         'location',
         'location_id',
         'start_date',
         'end_date',
-        'previous_relation_id',
         'created_by_user_id',
     ];
 

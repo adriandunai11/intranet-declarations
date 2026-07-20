@@ -19,7 +19,7 @@
                                 Javítás szükséges
                             </div>
                             <div style="font-size:14px; color:#ffe4e8; margin-top:4px;">
-                                Miell Group dokumentumkitöltés
+                                Miell Group nyilatkozatkitöltés
                             </div>
                         </td>
                     </tr>
@@ -31,7 +31,7 @@
                             </p>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
-                                Az alábbi dokumentum<?= !empty($rejectedItems) && count($rejectedItems) > 1 ? 'ok' : '' ?>
+                                Az alábbi nyilatkozat<?= !empty($rejectedItems) && count($rejectedItems) > 1 ? 'ok' : '' ?>
                                 ellenőrzés után javításra visszaküldésre került<?= !empty($rejectedItems) && count($rejectedItems) > 1 ? 'ek' : '' ?>:
                             </p>
 
@@ -53,7 +53,7 @@
                             <?php endforeach; ?>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
-                                Kérjük, nyissa meg újra a korábban kapott dokumentumkitöltő linket, javítsa az adatokat,
+                                Kérjük, nyissa meg újra a korábban kapott nyilatkozatkitöltő linket, javítsa az adatokat,
                                 majd küldje be ismét ellenőrzésre.
                             </p>
 

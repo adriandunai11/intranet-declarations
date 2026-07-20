@@ -36,7 +36,7 @@ class DeclarationSubmissionPdfGenerator
         $lines = [
             ['text' => 'Online nyilatkozat - bekuldesi osszesito', 'size' => 16, 'bold' => true],
             ['text' => (string) ($summary['title'] ?? 'Nyilatkozat'), 'size' => 13, 'bold' => true],
-            ['text' => 'A dokumentum az online feluleten bekuldott adatok alapjan keszult munkaügyi lefuzeshez.', 'size' => 9],
+            ['text' => 'A PDF az online felületen beküldött adatok alapján készült munkaügyi lefűzéshez.', 'size' => 9],
             ['text' => '', 'size' => 10],
         ];
 

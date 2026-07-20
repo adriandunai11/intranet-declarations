@@ -12,6 +12,11 @@ class DeclarationPacketItem extends Entity
     public const STATUS_ACCEPTED = 'accepted';
     public const STATUS_REJECTED = 'rejected';
 
+    public const SOURCE_REQUIRED_ONBOARDING = 'required_onboarding';
+    public const SOURCE_ADMIN_SELECTED = 'admin_selected';
+    public const SOURCE_CANDIDATE_SELECTED = 'candidate_selected';
+    public const SOURCE_SELF_SERVICE_PRIMARY = 'self_service_primary';
+
     protected $dates = [
         'completed_at',
         'accepted_at',

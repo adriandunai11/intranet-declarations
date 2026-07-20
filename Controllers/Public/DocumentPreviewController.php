@@ -33,7 +33,7 @@ class DocumentPreviewController extends BaseController
             if (!$this->isAntraVerified($context)) {
                 return redirect()
                     ->to($this->urlService->start($token))
-                    ->with('sError', 'A dokumentum előnézetéhez először adja meg az Antra azonosítót.');
+                    ->with('sError', 'A PDF előnézethez először adja meg az Antra azonosítót.');
             }
 
             $item = $this->submissionService->getItemForContext($context, $itemId);
@@ -66,7 +66,7 @@ class DocumentPreviewController extends BaseController
                     $this->previewService->previewDataForPacketItem(
                         (int) $context->packet->id,
                         (int) $item->id,
-                        'A PDF előnézet most nem állítható elő, ezért az online kitöltésből készített dokumentum-előnézetet jelenítjük meg.'
+                        'A PDF előnézet most nem állítható elő, ezért az online kitöltésből készített nyilatkozat-előnézetet jelenítjük meg.'
                     ),
                     [
                         'backUrl' => $this->urlService->start($token),
@@ -75,7 +75,7 @@ class DocumentPreviewController extends BaseController
             }
         } catch (Throwable $e) {
             return view('App\Modules\Declarations\Views\public\documents\preview_unavailable', [
-                'title' => 'Dokumentum előnézet',
+                'title' => 'PDF előnézet',
                 'message' => $e->getMessage(),
                 'backUrl' => $this->urlService->start($token),
             ]);

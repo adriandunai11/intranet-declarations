@@ -4,7 +4,7 @@
 
 <div class="access-layout access-layout-narrow">
     <aside class="access-side access-side-danger">
-        <div class="eyebrow">Dokumentum előnézet</div>
+        <div class="eyebrow">PDF előnézet</div>
         <h1>Az előnézet most nem érhető el</h1>
         <p>
             A nyilatkozat adatai ettől még mentve lehetnek. Lépjen vissza az összesítőhöz, és ellenőrizze az ott megjelenő adatokat.
@@ -14,7 +14,7 @@
     <main class="access-main">
         <section class="content-card access-card">
             <div class="notice notice-warning">
-                <?= esc($message ?? 'A dokumentum előnézet generálása nem sikerült.') ?>
+                <?= esc($message ?? 'A PDF előnézet generálása nem sikerült.') ?>
             </div>
 
             <div class="actions">

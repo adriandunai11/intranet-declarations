@@ -60,7 +60,7 @@ class DeclarationDocumentGenerationService
         $templateCode = trim((string) ($item->template_code ?? ''));
 
         if ($templateCode === '') {
-            throw new RuntimeException('A nyilatkozat sablonkódja hiányzik.');
+            throw new RuntimeException('A nyilatkozat kódja hiányzik.');
         }
 
         $person = $this->personModel->find((int) $packet->person_id);

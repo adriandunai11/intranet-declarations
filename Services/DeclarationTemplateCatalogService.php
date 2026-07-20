@@ -8,6 +8,13 @@ use RuntimeException;
 
 class DeclarationTemplateCatalogService
 {
+    private const OBSOLETE_TEMPLATE_CODES = [
+        'absence_statement',
+        'tb_booklet_statement',
+        'employment_history_statement',
+        'deduction_statement',
+    ];
+
     protected DeclarationTemplateModel $templateModel;
 
     public function __construct(?DeclarationTemplateModel $templateModel = null)
@@ -29,7 +36,10 @@ class DeclarationTemplateCatalogService
         ];
 
         foreach ($this->catalog() as $row) {
-            $existing = $this->templateModel->findByCode((string) $row['code'], isset($row['tax_year']) ? (int) $row['tax_year'] : null);
+            $taxYear = array_key_exists('tax_year', $row) && $row['tax_year'] !== null
+                ? (int) $row['tax_year']
+                : null;
+            $existing = $this->templateModel->findByCode((string) $row['code'], $taxYear);
             $payload = $this->payload($row);
 
             if ($existing) {
@@ -55,6 +65,8 @@ class DeclarationTemplateCatalogService
             $result['created']++;
         }
 
+        $this->deactivateObsoleteTemplates();
+
         return $result;
     }
 
@@ -73,12 +85,9 @@ class DeclarationTemplateCatalogService
             $this->tax('under_25_tax_discount_waiver', 'ANY25NEM', '25 év alattiak (nemleges)', 'Adóelőleg-nyilatkozat a 25 év alatti fiatalok kedvezményének részben vagy egészben történő mellőzéséről', '2022. január 1-től új adóalap-kedvezményt vehetnek igénybe a 25 év alatti fiatalok. A kedvezmény érvényesítését a fiatalnak nem kell kérnie, azt a munkáltató, rendszeres bevételt juttató kifizető a jogosultsági hónapokban automatikusan figyelembe veszi. Nyilatkozatot kizárólag akkor kell kitölteni, ha a fiatal a kedvezményt csak részben vagy egyáltalán nem kívánja érvényesíteni.', 70, ['25 év alatti', 'nemleges', 'ANY25NEM']),
 
             $this->own('personal_data_statement', 'Személyes adatok', 'A munkavállaló alap személyes és azonosító adatainak megadása vagy ellenőrzése.', 'A beléptetéshez és a nyilatkozatok pontos kitöltéséhez szükséges személyes adatok rögzítése. Meglévő munkavállalónál adatváltozási kérelemként érdemes kezelni.', DeclarationTemplate::GROUP_PERSONAL_DATA, DeclarationTemplate::CATEGORY_ONBOARDING, DeclarationTemplate::REQUIRED_ALWAYS, DeclarationTemplate::REVIEW_ROLE_RECRUITER, false, 100, ['személyes adatok', 'TAJ', 'adóazonosító']),
-            $this->own('bank_account_statement', 'Nyilatkozat bankszámlaszámról', 'Nyilatkozat a munkabér utalásához használt bankszámlaszámról.', 'A munkavállaló ezen a nyilatkozaton adja meg azt a bankszámlaszámot, amelyre a munkabér és egyéb járandóságok utalását kéri.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_PAYROLL, DeclarationTemplate::REQUIRED_ALWAYS, DeclarationTemplate::REVIEW_ROLE_PAYROLL, true, 110, ['bankszámla', 'munkabér', 'utalás']),
+            $this->own('bank_account_statement', 'Nyilatkozat bankszámlaszámról', 'Nyilatkozat a munkabér utalásához használt bankszámlaszámról.', 'A munkavállaló ezen a nyilatkozaton adja meg azt a bankszámlaszámot, amelyre a munkabér és egyéb járandóságok utalását kéri.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_PAYROLL, DeclarationTemplate::REQUIRED_ALWAYS, DeclarationTemplate::REVIEW_ROLE_PAYROLL, false, 110, ['bankszámla', 'munkabér', 'utalás']),
             $this->own('bank_account_change_statement', 'Bankszámlaszám módosítása', 'Meglévő munkavállaló bankszámlaszám-módosítási nyilatkozata.', 'A munkavállaló ezen a nyilatkozaton jelenti be, ha a munkabér és egyéb járandóságok utalásához használt bankszámlaszámát módosítani szeretné.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_PAYROLL, DeclarationTemplate::REQUIRED_OPTIONAL, DeclarationTemplate::REVIEW_ROLE_PAYROLL, true, 120, ['bankszámlaszám módosítás', 'munkabér', 'utalás']),
-            $this->own('deduction_statement', 'Nyilatkozat letiltásról', 'Nyilatkozat munkabérből történő letiltásról vagy annak hiányáról.', 'A munkavállaló ezen a nyilatkozaton ad tájékoztatást arról, hogy van-e munkabérből történő letiltása vagy olyan kötelezettsége, amelyet a munkáltatónak figyelembe kell vennie.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_PAYROLL, DeclarationTemplate::REQUIRED_CONDITIONAL, DeclarationTemplate::REVIEW_ROLE_PAYROLL, false, 130, ['letiltás', 'munkabér', 'végrehajtás']),
-            $this->own('child_extra_leave_statement', 'Gyermek után járó pótszabadság igénybevételéről', 'Nyilatkozat a gyermek után járó pótszabadság igénybevételéről.', 'A munkavállaló ezen a nyilatkozaton jelzi, ha gyermek után járó pótszabadságot szeretne igénybe venni, illetve megadja az ehhez szükséges gyermekadatokat.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_EMPLOYMENT, DeclarationTemplate::REQUIRED_CONDITIONAL, DeclarationTemplate::REVIEW_ROLE_PAYROLL, true, 140, ['pótszabadság', 'gyermek', 'szabadság']),
-            $this->own('tb_booklet_statement', 'TB kiskönyv nyilatkozat', 'Nyilatkozat a TB kiskönyv leadásáról vagy pótlásáról.', 'A munkavállaló ezen a nyilatkozaton jelzi, hogy le tudja-e adni a TB kiskönyvét, még nem állt biztosítási jogviszonyban, elvesztette a korábbi TB kiskönyvet, vagy az előző munkáltatótól nem kapta meg.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_ONBOARDING, DeclarationTemplate::REQUIRED_ALWAYS, DeclarationTemplate::REVIEW_ROLE_PAYROLL, false, 150, ['TB kiskönyv', 'biztosítási jogviszony', 'beléptetés']),
-            $this->own('employment_history_statement', 'Jogviszony nyilatkozat', 'Nyilatkozat a jelenlegi munkaviszonyt megelőző biztosítási jogviszonyokról.', 'A munkavállaló ezen a nyilatkozaton nyilatkozik arról, hogy a jelenlegi munkaviszonyt megelőző két évben milyen biztosítási jogviszonyai voltak, illetve volt-e olyan jogviszonya, amelyet dokumentummal igazolni tud.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_ONBOARDING, DeclarationTemplate::REQUIRED_ALWAYS, DeclarationTemplate::REVIEW_ROLE_PAYROLL, false, 160, ['jogviszony', 'biztosítási jogviszony', 'TB']),
+            $this->own('child_extra_leave_statement', 'Gyermek után járó pótszabadság igénybevételéről', 'Nyilatkozat a gyermek után járó pótszabadság igénybevételéről.', 'A munkavállaló ezen a nyilatkozaton jelzi, hogy kéri-e a gyermek után járó pótszabadság figyelembevételét, és igen válasz esetén megadja az ehhez szükséges gyermekadatokat.', DeclarationTemplate::GROUP_EMPLOYMENT, DeclarationTemplate::CATEGORY_EMPLOYMENT, DeclarationTemplate::REQUIRED_ALWAYS, DeclarationTemplate::REVIEW_ROLE_PAYROLL, true, 130, ['pótszabadság', 'gyermek', 'szabadság']),
         ];
     }
 
@@ -101,7 +110,6 @@ class DeclarationTemplateCatalogService
             'renewal_policy' => DeclarationTemplate::RENEWAL_YEARLY,
             'required_policy' => DeclarationTemplate::REQUIRED_OPTIONAL,
             'review_role' => DeclarationTemplate::REVIEW_ROLE_PAYROLL,
-            'needs_signature' => 0,
             'is_candidate_selectable' => 1,
             'company_scope' => 'all',
             'class_name' => null,
@@ -138,7 +146,6 @@ class DeclarationTemplateCatalogService
             'renewal_policy' => $employeeSelectable ? DeclarationTemplate::RENEWAL_WHEN_CHANGED : DeclarationTemplate::RENEWAL_PER_RELATION,
             'required_policy' => $requiredPolicy,
             'review_role' => $reviewRole,
-            'needs_signature' => 0,
             'is_candidate_selectable' => $employeeSelectable ? 1 : 0,
             'company_scope' => 'all',
             'class_name' => null,
@@ -179,6 +186,18 @@ class DeclarationTemplateCatalogService
         }
 
         $db->query('ALTER TABLE `declaration_templates` ADD `details_json` TEXT NULL AFTER `description`');
+    }
+
+    private function deactivateObsoleteTemplates(): void
+    {
+        if (self::OBSOLETE_TEMPLATE_CODES === []) {
+            return;
+        }
+
+        db_connect()
+            ->table('declaration_templates')
+            ->whereIn('code', self::OBSOLETE_TEMPLATE_CODES)
+            ->update(['is_active' => 0]);
     }
 
     private function errors(string $fallback): string

@@ -6,13 +6,13 @@
     <aside class="access-side">
         <div class="eyebrow">Előkészítés alatt</div>
         <h1>Ez a nyilatkozat még nem tölthető ki online</h1>
-        <p>A dokumentum online kitöltése még előkészítés alatt áll.</p>
+        <p>A nyilatkozat online kitöltése még előkészítés alatt áll.</p>
     </aside>
 
     <main class="access-main">
         <section class="content-card">
             <div class="notice notice-info">
-                Térjen vissza az összesítőhöz, és folytassa a többi elérhető dokumentummal.
+                Térjen vissza az összesítőhöz, és folytassa a többi elérhető nyilatkozattal.
             </div>
 
             <div class="form-actions-row form-actions-row-end">

@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Belépéshez szükséges dokumentumok kitöltése</title>
+    <title>Belépéshez szükséges nyilatkozatok kitöltése</title>
 </head>
 
 <body style="margin:0; padding:0; background:#f3f6f2; font-family:Arial, Helvetica, sans-serif; color:#1f2933;">
@@ -19,7 +19,7 @@
                                 Miell Group
                             </div>
                             <div style="font-size:14px; color:#eefbea; margin-top:4px;">
-                                Belépéshez szükséges dokumentumok
+                                Belépéshez szükséges nyilatkozatok
                             </div>
                         </td>
                     </tr>
@@ -27,7 +27,7 @@
                     <tr>
                         <td style="padding:30px 28px 10px;">
                             <h1 style="margin:0 0 18px; font-size:24px; line-height:1.3; color:#162018;">
-                                Dokumentumok kitöltése
+                                Nyilatkozatok kitöltése
                             </h1>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
@@ -35,7 +35,7 @@
                             </p>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
-                                A belépéshez szükséges dokumentumokat az alábbi biztonságos linken tudja kitölteni és
+                                A belépéshez szükséges nyilatkozatokat az alábbi biztonságos linken tudja kitölteni és
                                 beküldeni.
                             </p>
 
@@ -44,12 +44,24 @@
                                 meg.
                             </p>
 
+                            <?php if (!empty($antraId)): ?>
+                                <div
+                                    style="background:#f8faf7; border:1px solid #dfe5dc; border-radius:12px; padding:14px 16px; margin:22px 0;">
+                                    <p style="margin:0 0 4px; font-size:13px; line-height:1.6; color:#667085;">
+                                        A link megnyitásakor ezt az azonosítót kell megadnia:
+                                    </p>
+                                    <p style="margin:0; font-size:18px; line-height:1.4; font-weight:700; color:#162018;">
+                                        ANTRA azonosító: <?= esc($antraId) ?>
+                                    </p>
+                                </div>
+                            <?php endif; ?>
+
                             <table role="presentation" cellspacing="0" cellpadding="0" style="margin:26px 0;">
                                 <tr>
                                     <td style="background:rgb(80,184,72); border-radius:10px;">
                                         <a href="<?= esc($invitationUrl) ?>"
                                             style="display:inline-block; padding:13px 20px; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700;">
-                                            Dokumentumok kitöltése
+                                            Nyilatkozatok kitöltése
                                         </a>
                                     </td>
                                 </tr>

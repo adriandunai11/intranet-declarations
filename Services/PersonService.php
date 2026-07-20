@@ -52,7 +52,7 @@ class PersonService
 
         $payload = $this->payloadFromInput($data);
 
-        // TAJ számot és adóazonosító jelet a beálló adja meg a public kitöltőfelületen.
+        // TAJ számot és adóazonosító jelet a kitöltő adja meg a public kitöltőfelületen.
         // Ha az admin űrlap nem küldi ezeket a mezőket, nem nullázzuk ki a már meglévő adatot.
         if (!array_key_exists('tax_number', $data)) {
             $payload['tax_number'] = $person->tax_number ?? null;

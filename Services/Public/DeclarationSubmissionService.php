@@ -85,33 +85,21 @@ class DeclarationSubmissionService
         return $this->submissionModel->findByPacketIdIndexedByItemId($packetId);
     }
 
-    public function allRequiredItemsCompleted(InvitationContext $context): bool
-    {
-        return $this->allPacketItemsCompleted($context);
-    }
-
     public function allPacketItemsCompleted(InvitationContext $context): bool
     {
-        foreach ($this->getItemsForContext($context) as $item) {
+        $items = $this->getItemsForContext($context);
+
+        if ($items === []) {
+            return false;
+        }
+
+        foreach ($items as $item) {
             if (!$this->isItemCompletedForFinalize($item)) {
                 return false;
             }
         }
 
         return true;
-    }
-
-    public function incompleteItemsForFinalize(InvitationContext $context): array
-    {
-        $items = [];
-
-        foreach ($this->getItemsForContext($context) as $item) {
-            if (!$this->isItemCompletedForFinalize($item)) {
-                $items[] = $item;
-            }
-        }
-
-        return $items;
     }
 
     public function canFinalize(InvitationContext $context): bool
@@ -126,7 +114,7 @@ class DeclarationSubmissionService
     public function finalize(InvitationContext $context): void
     {
         if (!$this->canFinalize($context)) {
-            throw new \RuntimeException('A végleges beküldéshez minden csomagban lévő dokumentumot ki kell tölteni.');
+            throw new \RuntimeException('A végleges beküldéshez minden csomagban lévő nyilatkozatot ki kell tölteni, vagy a nem kért választható nyilatkozatot el kell távolítani.');
         }
 
         $submittedNow = $this->workflowService->submitPacketIfReady($context);
@@ -143,22 +131,10 @@ class DeclarationSubmissionService
 
     public function removeCandidateSelectedItem(InvitationContext $context, int $itemId): void
     {
-        if (!in_array((string) $context->packet->status, [
-            DeclarationPacket::STATUS_DRAFT,
-            DeclarationPacket::STATUS_SENT,
-            DeclarationPacket::STATUS_IN_PROGRESS,
-        ], true)) {
-            throw new \RuntimeException('A nyilatkozatcsomag már be lett küldve, ezért nem módosítható.');
-        }
-
         $item = $this->getItemForContext($context, $itemId);
 
-        if ((int) ($item->template_is_candidate_selectable ?? 0) !== 1) {
+        if (!$this->canRemoveCandidateSelectedItem($context, $item)) {
             throw new \RuntimeException('Ez a nyilatkozat nem távolítható el a kitöltő által.');
-        }
-
-        if ((string) $item->status === DeclarationPacketItem::STATUS_ACCEPTED) {
-            throw new \RuntimeException('Elfogadott nyilatkozat már nem távolítható el.');
         }
 
         $submission = $this->findSubmissionForItem($itemId);
@@ -180,7 +156,7 @@ class DeclarationSubmissionService
                 $itemId,
                 (string) $item->status,
                 null,
-                'Beálló által választható nyilatkozat eltávolítva a csomagból.',
+                'Kitöltő által választható nyilatkozat eltávolítva a csomagból.',
                 [
                     'actor_type' => 'candidate',
                     'actor_label' => $context->invitation->email ?? null,
@@ -211,7 +187,7 @@ class DeclarationSubmissionService
         IncomingRequest $request
     ): void {
         if ($this->isClosed($item, $context->packet)) {
-            throw new DeclarationAlreadySubmittedException('Ezt a nyilatkozatot már beküldted.');
+            throw new DeclarationAlreadySubmittedException('Ezt a nyilatkozatot már beküldte.');
         }
 
         if ($handler instanceof \App\Modules\Declarations\Services\DeclarationForms\UnsupportedDeclarationHandler) {
@@ -254,7 +230,7 @@ class DeclarationSubmissionService
                     DeclarationPacketItem::STATUS_ACCEPTED,
                 ], true)
             ) {
-                throw new DeclarationAlreadySubmittedException('Ezt a nyilatkozatot már beküldted.');
+                throw new DeclarationAlreadySubmittedException('Ezt a nyilatkozatot már beküldte.');
             }
 
             if ($existingSubmission && in_array((string) $item->status, [
@@ -300,7 +276,7 @@ class DeclarationSubmissionService
                     (int) $item->id,
                     null,
                     null,
-                    'A beálló személyes adatai frissültek a beküldött nyilatkozat alapján.',
+                    'A kitöltő személyes adatai frissültek a beküldött nyilatkozat alapján.',
                     [
                         'actor_type' => $submissionEvidence['submitter_type'] ?? 'candidate',
                         'actor_user_id' => $submissionEvidence['submitter_user_id'] ?? null,
@@ -325,7 +301,7 @@ class DeclarationSubmissionService
                 (int) $item->id,
                 $oldItemStatus,
                 DeclarationPacketItem::STATUS_COMPLETED,
-                $wasResubmission ? 'A beálló javítás után újra beküldte a dokumentumot.' : 'A beálló beküldte a dokumentumot.',
+                $wasResubmission ? 'A kitöltő javítás után újra beküldte a nyilatkozatot.' : 'A kitöltő beküldte a nyilatkozatot.',
                 [
                     'actor_type' => $submissionEvidence['submitter_type'] ?? 'candidate',
                     'actor_user_id' => $submissionEvidence['submitter_user_id'] ?? null,
@@ -356,6 +332,17 @@ class DeclarationSubmissionService
             $db->transRollback();
             throw $e;
         }
+    }
+
+    public function canRemoveCandidateSelectedItem(InvitationContext $context, object $item): bool
+    {
+        return in_array((string) $context->packet->status, [
+            DeclarationPacket::STATUS_DRAFT,
+            DeclarationPacket::STATUS_SENT,
+            DeclarationPacket::STATUS_IN_PROGRESS,
+        ], true)
+            && (string) ($item->selection_source ?? '') === DeclarationPacketItem::SOURCE_CANDIDATE_SELECTED
+            && (string) $item->status !== DeclarationPacketItem::STATUS_ACCEPTED;
     }
 
     private function encodeSubmissionData(array $data): string
@@ -441,12 +428,12 @@ class DeclarationSubmissionService
             'mother_name' => 'Az anyja neve megadása kötelező, legalább 3 karakterrel.',
             'birth_place' => 'A születési hely megadása kötelező.',
             'birth_date' => 'A születési dátum megadása kötelező, év-hónap-nap formátumban.',
-            'tax_number' => 'Az adóazonosító jelet pontosan, számjegyekkel add meg.',
-            'taj_number' => 'A TAJ számot pontosan, számjegyekkel add meg.',
+            'tax_number' => 'Az adóazonosító jelet pontosan, számjegyekkel adja meg.',
+            'taj_number' => 'A TAJ számot pontosan, számjegyekkel adja meg.',
             'phone' => 'A telefonszám megadása kötelező.',
             'account_holder' => 'A számlatulajdonos nevének megadása kötelező.',
-            'bank_name' => 'A bank nevének megadása kötelező.',
-            'bank_account_number' => 'A bankszámlaszámot 16 vagy 24 számjeggyel add meg.',
+            'bank_name' => 'A bank nevét akkor kell megadni, ha a bankszámlaszám elejéből nem ismerhető fel automatikusan.',
+            'bank_account_number' => 'A bankszámlaszámot 16 vagy 24 számjeggyel adja meg.',
             'confirm_truth' => 'A beküldéshez el kell fogadni a valóságtartalomról szóló nyilatkozatot.',
         ];
 

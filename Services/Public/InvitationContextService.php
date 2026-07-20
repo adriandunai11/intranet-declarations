@@ -58,7 +58,7 @@ class InvitationContextService
 
         if ($invitation) {
             if ($invitation->isExpired()) {
-                throw new \RuntimeException('A meghívó link lejárt. Kérjük, kérjen új dokumentumkitöltő linket.');
+                throw new \RuntimeException('A meghívó link lejárt. Kérjük, kérjen új nyilatkozatkitöltő linket.');
             }
 
             if ((string) $invitation->status === DeclarationInvitation::STATUS_REVOKED) {
@@ -66,11 +66,11 @@ class InvitationContextService
             }
 
             if ((string) $invitation->status === DeclarationInvitation::STATUS_COMPLETED) {
-                throw new \RuntimeException('Ez a dokumentumkitöltő link már lezárt folyamatra mutat. Ha javítás szükséges, kérjen új meghívó linket.');
+                throw new \RuntimeException('Ez a nyilatkozatkitöltő link már lezárt folyamatra mutat. Ha javítás szükséges, kérjen új meghívó linket.');
             }
 
             if ((string) $invitation->status === DeclarationInvitation::STATUS_CANCELLED) {
-                throw new \RuntimeException('Ez a meghívó link már nem használható. Kérjük, kérjen új dokumentumkitöltő linket.');
+                throw new \RuntimeException('Ez a meghívó link már nem használható. Kérjük, kérjen új nyilatkozatkitöltő linket.');
             }
         }
 

@@ -32,8 +32,4 @@ class Person extends Entity
         return trim(($this->attributes['lastname'] ?? '') . ' ' . ($this->attributes['firstname'] ?? ''));
     }
 
-    public function isLinkedToIntranet(): bool
-    {
-        return !empty($this->attributes['intranet_user_id']);
-    }
 }

@@ -23,6 +23,7 @@ class DeclarationPacketItemModel extends Model
         'template_code_snapshot',
         'template_name_snapshot',
         'template_version_snapshot',
+        'selection_source',
         'status',
         'sort_order',
         'completed_at',
@@ -36,6 +37,7 @@ class DeclarationPacketItemModel extends Model
     protected $validationRules = [
         'packet_id' => 'required|is_natural_no_zero',
         'template_id' => 'required|is_natural_no_zero',
+        'selection_source' => 'permit_empty|max_length[40]',
         'status' => 'required|max_length[30]',
         'sort_order' => 'permit_empty|integer',
     ];
@@ -82,7 +84,6 @@ class DeclarationPacketItemModel extends Model
             'declaration_templates.category AS template_category',
             'declaration_templates.declaration_group AS template_declaration_group',
             'declaration_templates.review_role AS template_review_role',
-            'declaration_templates.needs_signature AS template_needs_signature',
             'declaration_templates.is_candidate_selectable AS template_is_candidate_selectable',
             'declaration_templates.tax_year AS template_tax_year',
             'declaration_templates.required_policy AS template_required_policy',
@@ -164,10 +165,4 @@ class DeclarationPacketItemModel extends Model
         ]);
     }
 
-    public function countNotAcceptedByPacketId(int $packetId): int
-    {
-        return $this->where('packet_id', $packetId)
-            ->where('status !=', DeclarationPacketItem::STATUS_ACCEPTED)
-            ->countAllResults();
-    }
 }

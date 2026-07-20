@@ -4,14 +4,6 @@ namespace App\Modules\Declarations\Services\DeclarationForms;
 
 class TaxDeclarationSchemaService
 {
-    /**
-     * @return list<string>
-     */
-    public function supportedCodes(): array
-    {
-        return array_keys($this->schemas());
-    }
-
     public function supports(string $templateCode): bool
     {
         return isset($this->schemas()[$templateCode]);
@@ -73,7 +65,7 @@ class TaxDeclarationSchemaService
                     $this->spouseSection(false),
                 ],
                 'repeaters' => [
-                    $this->dependentRepeater(1, 12, 'Eltartottak adatai', 'Ha több gyermek van, adjon hozzá új sort. A dokumentumba az összes sor mentésre kerül.'),
+                    $this->dependentRepeater(1, 12, 'Eltartottak adatai', 'Ha több gyermek van, adjon hozzá új sort. A nyilatkozatba az összes sor mentésre kerül.'),
                 ],
             ],
             'first_marriage_discount' => [
@@ -410,9 +402,28 @@ class TaxDeclarationSchemaService
                 $this->text('name', 'Név', true),
                 $this->date('change_date', 'Változás időpontja', false),
                 $this->select('em_code', 'EM* kód', $this->dependentQualityOptions(), true, 'Eltartotti minőség kódja.'),
-                $this->select('jj_code', 'JJ** jogcím', $this->eligibilityTitleOptions(), true, 'Jogosultság jogcíme.'),
+                $this->requiredUnlessRowValues(
+                    $this->select('jj_code', 'JJ** jogcím', $this->eligibilityTitleOptions(), false, 'EM 0 vagy 2 esetén nem kell kitölteni. Egyéb EM kódnál kötelező.'),
+                    'em_code',
+                    ['0', '2']
+                ),
             ],
         ];
+    }
+
+    /**
+     * @param list<string> $values
+     * @param array<string, mixed> $field
+     * @return array<string, mixed>
+     */
+    private function requiredUnlessRowValues(array $field, string $fieldKey, array $values): array
+    {
+        $field['required_unless_row_values'] = [
+            'field' => $fieldKey,
+            'values' => $values,
+        ];
+
+        return $field;
     }
 
     /**

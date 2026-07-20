@@ -34,7 +34,7 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
             <div class="submitted-head">
                 <div>
                     <div class="eyebrow"><?= esc($summary['subtitle'] ?? 'Online kitöltési összesítő') ?></div>
-                    <h2>Generált dokumentum adatai</h2>
+                    <h2>Nyilatkozat előnézete</h2>
                     <p><?= esc($summary['note'] ?? 'Az előnézet a mentett online kitöltés alapján készült.') ?></p>
                 </div>
             </div>
@@ -57,7 +57,7 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
                 <div class="data-review-title">Kitöltött adatok</div>
 
                 <?php if (empty($rows)): ?>
-                    <div class="empty-state">Ehhez a dokumentumhoz nincs megjeleníthető kitöltött adat.</div>
+                    <div class="empty-state">Ehhez a nyilatkozathoz nincs megjeleníthető kitöltött adat.</div>
                 <?php else: ?>
                     <dl class="data-review-list">
                         <?php foreach ($rows as $label => $value): ?>

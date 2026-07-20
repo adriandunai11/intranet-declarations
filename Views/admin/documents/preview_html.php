@@ -116,7 +116,7 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-6">
-                <h1>Dokumentum előnézet</h1>
+                <h1>Nyilatkozat előnézete</h1>
             </div>
             <div class="col-sm-6">
                 <ol class="breadcrumb float-sm-right">
@@ -181,7 +181,7 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
             <h3>Kitöltött adatok</h3>
 
             <?php if (empty($rows)): ?>
-                <p class="text-muted mb-0">Ehhez a dokumentumhoz nincs megjeleníthető kitöltött adat.</p>
+                <p class="text-muted mb-0">Ehhez a nyilatkozathoz nincs megjeleníthető kitöltött adat.</p>
             <?php else: ?>
                 <div class="declaration-preview-grid">
                     <?php foreach ($rows as $label => $value): ?>

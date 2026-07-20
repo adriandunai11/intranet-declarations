@@ -71,7 +71,7 @@ class BankAccountDeclarationHandler implements DeclarationFormHandlerInterface
         }
 
         if (trim((string) ($data['bank_name'] ?? '')) === '') {
-            throw new RuntimeException('A bank nevét add meg, ha a bankszámlaszám elejéből nem ismerhető fel automatikusan.');
+            throw new RuntimeException('A bank nevét adja meg, ha a bankszámlaszám elejéből nem ismerhető fel automatikusan.');
         }
 
         if ((int) ($data['confirm_truth'] ?? 0) !== 1) {

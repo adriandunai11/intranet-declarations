@@ -6,7 +6,6 @@ use App\Modules\Declarations\Entities\DeclarationInvitation;
 use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
 use App\Modules\Declarations\Entities\DeclarationSubmission;
-use App\Modules\Declarations\Entities\DeclarationTemplate;
 use App\Modules\Declarations\Entities\EmploymentRelation;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Models\DeclarationInvitationModel;
@@ -394,7 +393,7 @@ class PacketReviewService
 
     private function closePacketIfEveryItemAccepted(int $packetId): void
     {
-        if (!$this->allRequiredItemsAccepted($packetId)) {
+        if (!$this->allPacketItemsAccepted($packetId)) {
             return;
         }
 
@@ -415,7 +414,7 @@ class PacketReviewService
             null,
             $oldPacketStatus,
             DeclarationPacket::STATUS_APPROVED,
-            'Minden kötelező nyilatkozat elfogadásra került.',
+            'Minden csomagban lévő nyilatkozat elfogadásra került.',
             [
                 'person_id' => (int) $packet->person_id,
                 'employment_relation_id' => (int) $packet->employment_relation_id,
@@ -437,7 +436,7 @@ class PacketReviewService
                     null,
                     $oldRelationStatus,
                     EmploymentRelation::STATUS_COMPLETED,
-                    'Minden kötelező nyilatkozat elfogadásra került.',
+                    'Minden csomagban lévő nyilatkozat elfogadásra került.',
                     [
                         'person_id' => (int) $packet->person_id,
                         'employment_relation_id' => (int) $relation->id,
@@ -448,16 +447,9 @@ class PacketReviewService
 
     }
 
-    private function allRequiredItemsAccepted(int $packetId): bool
+    private function allPacketItemsAccepted(int $packetId): bool
     {
         foreach ($this->itemModel->findWithTemplatesByPacketId($packetId) as $item) {
-            $requiredPolicy = (string) ($item->template_required_policy ?? '');
-            $isCandidateSelectable = (int) ($item->template_is_candidate_selectable ?? 0) === 1;
-
-            if ($requiredPolicy === DeclarationTemplate::REQUIRED_OPTIONAL || $isCandidateSelectable) {
-                continue;
-            }
-
             if ((string) $item->status !== DeclarationPacketItem::STATUS_ACCEPTED) {
                 return false;
             }

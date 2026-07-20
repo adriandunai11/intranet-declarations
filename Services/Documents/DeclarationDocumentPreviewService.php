@@ -90,7 +90,7 @@ class DeclarationDocumentPreviewService
             : null;
 
         return [
-            'title' => 'Dokumentum előnézet',
+            'title' => 'Nyilatkozat előnézete',
             'packet' => $packet,
             'item' => $item,
             'submission' => $submission,

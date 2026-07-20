@@ -29,6 +29,7 @@ class RecruiterService
 
         $users = $this->userModel
             ->whereIn('id', $userIds)
+            ->where('status', 1)
             ->findAll();
 
         usort($users, function ($a, $b): int {
@@ -44,7 +45,10 @@ class RecruiterService
             return null;
         }
 
-        return $this->userModel->find($userId);
+        return $this->userModel
+            ->where('id', $userId)
+            ->where('status', 1)
+            ->first();
     }
 
     public function ensureRecruiterExists(int $userId): void
@@ -57,7 +61,7 @@ class RecruiterService
             throw new RuntimeException('A kiválasztott felhasználó nem rendelkezik Toborzó szerepkörrel.');
         }
 
-        if (!$this->userModel->find($userId)) {
+        if (!$this->userModel->where('id', $userId)->where('status', 1)->first()) {
             throw new RuntimeException('A kiválasztott toborzó felhasználó nem található.');
         }
     }
@@ -127,9 +131,18 @@ class RecruiterService
 
     public function isRecruiter(int $userId): bool
     {
-        return $this->userRolesModel
+        $hasRole = $this->userRolesModel
             ->where('userid', $userId)
             ->where('role', self::RECRUITER_ROLE_ID)
+            ->first() !== null;
+
+        if (!$hasRole) {
+            return false;
+        }
+
+        return $this->userModel
+            ->where('id', $userId)
+            ->where('status', 1)
             ->first() !== null;
     }
 

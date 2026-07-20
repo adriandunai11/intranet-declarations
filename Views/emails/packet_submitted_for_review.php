@@ -19,7 +19,7 @@
                                 Nyilatkozatcsomag ellenőrzésre vár
                             </div>
                             <div style="font-size:14px; color:#eefbea; margin-top:4px;">
-                                Miell Group dokumentumkitöltés
+                                Miell Group nyilatkozatkitöltés
                             </div>
                         </td>
                     </tr>
@@ -27,19 +27,19 @@
                     <tr>
                         <td style="padding:30px 28px 10px;">
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
-                                A beálló véglegesen beküldte a nyilatkozatcsomagot, ellenőrzésre vár.
+                                A kitöltő véglegesen beküldte a nyilatkozatcsomagot, ellenőrzésre vár.
                             </p>
 
                             <div
                                 style="background:#f8faf7; border:1px solid #dfe5dc; border-radius:12px; padding:14px 16px; margin:18px 0;">
                                 <p style="margin:0 0 8px; font-size:14px; line-height:1.6;">
-                                    <strong>Beálló:</strong> <?= esc($personName ?: '-') ?>
+                                    <strong>Kitöltő:</strong> <?= esc($personName ?: '-') ?>
                                 </p>
                                 <p style="margin:0 0 8px; font-size:14px; line-height:1.6;">
                                     <strong>Cég:</strong> <?= esc($companyName ?: '-') ?>
                                 </p>
                                 <p style="margin:0 0 8px; font-size:14px; line-height:1.6;">
-                                    <strong>Adóév:</strong> <?= esc($packet->tax_year ?: '-') ?>
+                                    <strong>Nyilatkozati év:</strong> <?= esc($packet->tax_year ?: '-') ?>
                                 </p>
                                 <p style="margin:0; font-size:14px; line-height:1.6;">
                                     <strong>Elsődleges toborzó:</strong> <?= esc($recruiterName ?: '-') ?>

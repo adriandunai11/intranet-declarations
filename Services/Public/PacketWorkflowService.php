@@ -5,7 +5,6 @@ namespace App\Modules\Declarations\Services\Public;
 use App\Modules\Declarations\Entities\DeclarationInvitation;
 use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
-use App\Modules\Declarations\Entities\DeclarationTemplate;
 use App\Modules\Declarations\Entities\EmploymentRelation;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Models\DeclarationInvitationModel;
@@ -51,7 +50,7 @@ class PacketWorkflowService
                 null,
                 $oldInvitationStatus,
                 DeclarationInvitation::STATUS_OPENED,
-                'A beálló megnyitotta a dokumentumkitöltő linket.',
+                'A kitöltő megnyitotta a nyilatkozatkitöltő linket.',
                 [
                     'actor_type' => 'candidate',
                     'actor_label' => $context->invitation->email ?? null,
@@ -76,7 +75,7 @@ class PacketWorkflowService
                 null,
                 (string) $context->packet->status,
                 DeclarationPacket::STATUS_IN_PROGRESS,
-                'A beálló megnyitotta a dokumentumkitöltő felületet.',
+                'A kitöltő megnyitotta a nyilatkozatkitöltő felületet.',
                 [
                     'actor_type' => 'candidate',
                     'actor_label' => $context->invitation->email ?? null,
@@ -105,7 +104,7 @@ class PacketWorkflowService
                     null,
                     $oldRelationStatus,
                     EmploymentRelation::STATUS_IN_PROGRESS,
-                    'A beálló megnyitotta a dokumentumkitöltő felületet.',
+                    'A kitöltő megnyitotta a nyilatkozatkitöltő felületet.',
                     [
                         'actor_type' => 'candidate',
                         'actor_label' => $context->invitation->email ?? null,
@@ -127,8 +126,8 @@ class PacketWorkflowService
 
     public function submitPacketIfReady(InvitationContext $context): bool
     {
-        if (!$this->allRequiredItemsSubmittedOrAccepted((int) $context->packet->id)) {
-            throw new \RuntimeException('A végleges beküldéshez minden kötelező dokumentumot ki kell tölteni.');
+        if (!$this->allPacketItemsSubmittedOrAccepted((int) $context->packet->id)) {
+            throw new \RuntimeException('A végleges beküldéshez minden csomagban lévő nyilatkozatot ki kell tölteni, vagy a nem kért választható nyilatkozatot el kell távolítani.');
         }
 
         $oldPacketStatus = (string) $context->packet->status;
@@ -153,7 +152,7 @@ class PacketWorkflowService
                 null,
                 $oldPacketStatus,
                 DeclarationPacket::STATUS_SUBMITTED,
-                'A beálló minden kötelező dokumentumot beküldött, a csomag ellenőrzésre vár.',
+                'A kitöltő véglegesen beküldte a nyilatkozatcsomagot, a csomag ellenőrzésre vár.',
                 [
                     'actor_type' => 'candidate',
                     'actor_label' => $context->invitation->email ?? null,
@@ -180,7 +179,7 @@ class PacketWorkflowService
                         null,
                         $oldRelationStatus,
                         EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
-                        'A beálló véglegesen beküldte a nyilatkozatcsomagot, ellenőrzésre vár.',
+                        'A kitöltő véglegesen beküldte a nyilatkozatcsomagot, ellenőrzésre vár.',
                         [
                             'actor_type' => 'candidate',
                             'actor_label' => $context->invitation->email ?? null,
@@ -196,16 +195,9 @@ class PacketWorkflowService
         return true;
     }
 
-    private function allRequiredItemsSubmittedOrAccepted(int $packetId): bool
+    private function allPacketItemsSubmittedOrAccepted(int $packetId): bool
     {
         foreach ($this->itemModel->findWithTemplatesByPacketId($packetId) as $item) {
-            $requiredPolicy = (string) ($item->template_required_policy ?? '');
-            $isCandidateSelectable = (int) ($item->template_is_candidate_selectable ?? 0) === 1;
-
-            if ($requiredPolicy === DeclarationTemplate::REQUIRED_OPTIONAL || $isCandidateSelectable) {
-                continue;
-            }
-
             if (!in_array((string) $item->status, [
                 DeclarationPacketItem::STATUS_COMPLETED,
                 DeclarationPacketItem::STATUS_ACCEPTED,

@@ -5,6 +5,9 @@
     <title><?= esc($title ?? 'Miell nyilatkozatok') ?></title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#50b848">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= base_url('assets/declarations/css/public.css') ?>">
     <?php $localPublicCss = dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'assets' . DIRECTORY_SEPARATOR . 'declarations' . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'public.css'; ?>
     <?php if (is_file($localPublicCss)): ?>
@@ -336,7 +339,7 @@
                     var detectedBankName = source ? bankNameForAccountNumber(source.value) : '';
 
                     if (sourceDigits.length >= 3 && detectedBankName === '' && isEmpty(input)) {
-                        return 'A bank nevét add meg, ha nem ismerjük fel automatikusan a bankszámlaszám elejéből.';
+                        return 'A bank nevét adja meg, ha nem ismerjük fel automatikusan a bankszámlaszám elejéből.';
                     }
                 }
             }
@@ -388,7 +391,7 @@
 
             var total = results.length;
             var valid = results.filter(function (result) {
-                return result.message === '' && !isEmpty(result.input);
+                return result.message === '';
             }).length;
             var percent = total > 0 ? Math.round((valid / total) * 100) : 0;
             var fill = progress.querySelector('[data-progress-fill]');

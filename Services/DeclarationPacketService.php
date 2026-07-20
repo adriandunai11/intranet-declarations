@@ -82,12 +82,18 @@ class DeclarationPacketService
         }));
 
         if (empty($templates)) {
-            throw new RuntimeException('Nincs aktív online kitölthető alap beléptetési nyilatkozat sablon.');
+            throw new RuntimeException('Nincs aktív online kitölthető alap beléptetési nyilatkozat.');
         }
 
         $templateIds = array_map(static fn($template): int => (int) $template->id, $templates);
 
-        return $this->createForRelation($relationId, $templateIds, $taxYear);
+        return $this->createForRelation(
+            $relationId,
+            $templateIds,
+            $taxYear,
+            DeclarationPacketItem::SOURCE_REQUIRED_ONBOARDING,
+            DeclarationPacket::FLOW_ONBOARDING
+        );
     }
 
     public function getCandidateSelectableTaxTemplates(?int $taxYear = null): array
@@ -95,7 +101,13 @@ class DeclarationPacketService
         return $this->templateModel->findCandidateSelectableTaxTemplates($taxYear);
     }
 
-    public function createForRelation(int $relationId, array $templateIds, ?int $taxYear = null): int
+    public function createForRelation(
+        int $relationId,
+        array $templateIds,
+        ?int $taxYear = null,
+        string $selectionSource = DeclarationPacketItem::SOURCE_ADMIN_SELECTED,
+        string $flowType = DeclarationPacket::FLOW_ADMIN_MANUAL
+    ): int
     {
         $relation = $this->relationModel->find($relationId);
 
@@ -108,7 +120,7 @@ class DeclarationPacketService
         }
 
         $taxYear = $this->normalizeTaxYear($taxYear);
-        $this->assertNoBlockingPacketForRelation($relation, $taxYear);
+        $this->assertNoBlockingPacketForRelation($relation);
 
         $templateIds = array_values(array_unique(array_filter(array_map('intval', $templateIds))));
 
@@ -142,6 +154,7 @@ class DeclarationPacketService
                 'employment_relation_id' => $relation->id,
                 'company_id' => $relation->company_id,
                 'status' => DeclarationPacket::STATUS_DRAFT,
+                'flow_type' => $flowType,
                 'tax_year' => $taxYear,
                 'created_by_user_id' => function_exists('logged') ? logged('id') : null,
             ], true);
@@ -157,6 +170,7 @@ class DeclarationPacketService
                 $itemId = $this->itemModel->insert([
                     'packet_id' => $packetId,
                     'template_id' => $template->id,
+                    'selection_source' => $selectionSource,
                     'status' => DeclarationPacketItem::STATUS_PENDING,
                     'sort_order' => $sortOrder,
                 ], true);
@@ -181,6 +195,7 @@ class DeclarationPacketService
                         'template_id' => (int) $template->id,
                         'template_code' => $template->code ?? null,
                         'template_name' => $template->name ?? null,
+                        'selection_source' => $selectionSource,
                     ]
                 );
 
@@ -201,6 +216,7 @@ class DeclarationPacketService
                     'person_id' => (int) $relation->person_id,
                     'company_id' => (int) $relation->company_id,
                     'tax_year' => $taxYear,
+                    'flow_type' => $flowType,
                     'template_ids' => $templateIds,
                 ]
             );
@@ -290,7 +306,6 @@ class DeclarationPacketService
 
         $this->assertNoBlockingPacketForRelation(
             $relation,
-            $this->normalizeTaxYear(!empty($packet->tax_year) ? (int) $packet->tax_year : null),
             (int) $packet->id
         );
 
@@ -572,6 +587,7 @@ class DeclarationPacketService
         $itemId = $this->itemModel->insert([
             'packet_id' => (int) $packet->id,
             'template_id' => (int) $template->id,
+            'selection_source' => DeclarationPacketItem::SOURCE_ADMIN_SELECTED,
             'status' => DeclarationPacketItem::STATUS_PENDING,
             'sort_order' => $this->itemModel->nextSortOrderForPacket((int) $packet->id),
         ], true);
@@ -597,6 +613,7 @@ class DeclarationPacketService
                 'template_id' => (int) $template->id,
                 'template_code' => $template->code ?? null,
                 'template_name' => $template->name ?? null,
+                'selection_source' => DeclarationPacketItem::SOURCE_ADMIN_SELECTED,
             ]
         );
 
@@ -607,6 +624,10 @@ class DeclarationPacketService
     public function getCandidateSelectableTaxTemplatesForPacket(int $packetId): array
     {
         $packet = $this->findPacket($packetId);
+
+        if (!$this->canCandidateSelectTaxTemplates($packet)) {
+            return [];
+        }
 
         if (in_array((string) $packet->status, [
             DeclarationPacket::STATUS_APPROVED,
@@ -637,6 +658,10 @@ class DeclarationPacketService
     {
         $packet = $this->findPacket($packetId);
 
+        if (!$this->canCandidateSelectTaxTemplates($packet)) {
+            throw new RuntimeException('Beléptetési csomaghoz csak az előre kiválasztott adóügyi nyilatkozatok tölthetők ki.');
+        }
+
         if (in_array((string) $packet->status, [
             DeclarationPacket::STATUS_APPROVED,
             DeclarationPacket::STATUS_SUBMITTED,
@@ -654,7 +679,7 @@ class DeclarationPacketService
         }
 
         if ((string) $template->declaration_group !== DeclarationTemplate::GROUP_TAX || (int) $template->is_candidate_selectable !== 1) {
-            throw new RuntimeException('Ez a nyilatkozat nem választható a beálló által.');
+            throw new RuntimeException('Ez a nyilatkozat nem választható a kitöltő által.');
         }
 
         if (!empty($packet->tax_year) && !empty($template->tax_year) && (int) $packet->tax_year !== (int) $template->tax_year) {
@@ -670,6 +695,7 @@ class DeclarationPacketService
         $itemId = $this->itemModel->insert([
             'packet_id' => (int) $packet->id,
             'template_id' => (int) $template->id,
+            'selection_source' => DeclarationPacketItem::SOURCE_CANDIDATE_SELECTED,
             'status' => DeclarationPacketItem::STATUS_PENDING,
             'sort_order' => $this->itemModel->nextSortOrderForPacket((int) $packet->id),
         ], true);
@@ -688,18 +714,24 @@ class DeclarationPacketService
             (int) $itemId,
             null,
             DeclarationPacketItem::STATUS_PENDING,
-            'Beálló által választható adóügyi nyilatkozat hozzáadva a csomaghoz.',
+            'Kitöltő által választható adóügyi nyilatkozat hozzáadva a csomaghoz.',
             [
                 'person_id' => (int) $packet->person_id,
                 'employment_relation_id' => (int) $packet->employment_relation_id,
                 'template_id' => (int) $template->id,
                 'template_code' => $template->code ?? null,
                 'template_name' => $template->name ?? null,
+                'selection_source' => DeclarationPacketItem::SOURCE_CANDIDATE_SELECTED,
                 'tax_year' => $template->tax_year ?? null,
             ]
         );
 
         return (int) $itemId;
+    }
+
+    private function canCandidateSelectTaxTemplates(object $packet): bool
+    {
+        return (string) ($packet->flow_type ?? '') !== DeclarationPacket::FLOW_ONBOARDING;
     }
 
     private function normalizeTaxYear(?int $taxYear): int
@@ -712,7 +744,7 @@ class DeclarationPacketService
         $template = $this->templateModel->findByCode(self::PERSONAL_DATA_TEMPLATE_CODE);
 
         if (!$template || !$template->isActive()) {
-            throw new RuntimeException('A személyes adatok nyilatkozat sablon nem található vagy nem aktív.');
+            throw new RuntimeException('A személyes adatok nyilatkozat nem található vagy nem aktív.');
         }
 
         $templateIds[] = (int) $template->id;
@@ -731,12 +763,11 @@ class DeclarationPacketService
         throw new RuntimeException('A csomagból hiányzik a személyes adatok nyilatkozata, ezért nem küldhető ki.');
     }
 
-    private function assertNoBlockingPacketForRelation(EmploymentRelation $relation, int $taxYear, ?int $excludePacketId = null): void
+    private function assertNoBlockingPacketForRelation(EmploymentRelation $relation, ?int $excludePacketId = null): void
     {
-        $existingPacket = $this->packetModel->findBlockingByPersonCompanyAndTaxYearForOpenRelations(
+        $existingPacket = $this->packetModel->findOpenBlockingByPersonCompanyForOpenRelations(
             (int) $relation->person_id,
             (int) $relation->company_id,
-            $taxYear,
             $excludePacketId
         );
 
@@ -745,7 +776,7 @@ class DeclarationPacketService
         }
 
         throw new RuntimeException(
-            'Ehhez a nyitott jogviszonyhoz ennél a cégnél erre az adóévre már létezik nyilatkozatcsomag: #'
+            'Ehhez a személyhez ennél a cégnél már van nyitott nyilatkozatcsomag: #'
             . $existingPacket->id
         );
     }

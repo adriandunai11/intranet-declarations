@@ -12,6 +12,7 @@ class DeclarationFormRegistry
         $this->handlers = $handlers ?? [
             new PersonalDataDeclarationHandler(),
             new BankAccountDeclarationHandler(),
+            new StructuredStatementDeclarationHandler(),
             new TaxDeclarationHandler(),
         ];
     }
@@ -22,6 +23,10 @@ class DeclarationFormRegistry
 
         foreach ($this->handlers as $handler) {
             if ($handler->supports($templateCode)) {
+                if ($handler instanceof StructuredStatementDeclarationHandler) {
+                    return new StructuredStatementDeclarationHandler($item);
+                }
+
                 if ($handler instanceof TaxDeclarationHandler) {
                     return new TaxDeclarationHandler($item);
                 }

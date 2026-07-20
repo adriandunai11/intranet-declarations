@@ -48,8 +48,25 @@
                         <p class="text-muted"><?= esc($recruiterDisplayName ?? '-') ?></p>
                     <?php endif; ?>
 
-                    <strong>Adóév</strong>
+                    <strong>Nyilatkozati év</strong>
                     <p class="text-muted"><?= esc($packet->tax_year ?: '-') ?></p>
+
+                    <?php
+                    $packetFlowLabels = [
+                        'onboarding' => 'Beléptetés',
+                        'self_service' => 'Saját indítás',
+                        'self_service_tax' => 'Saját adóügyi',
+                        'self_service_change' => 'Saját adatmódosítás',
+                        'admin_manual' => 'Munkaügyi kiküldés',
+                    ];
+                    $packetFlowType = (string) ($packet->flow_type ?? '');
+                    ?>
+                    <?php if ($packetFlowType !== ''): ?>
+                        <strong>Csomag típusa</strong>
+                        <p class="text-muted">
+                            <?= esc($packetFlowLabels[$packetFlowType] ?? $packetFlowType) ?>
+                        </p>
+                    <?php endif; ?>
 
                     <strong>Státusz</strong>
                     <p>
@@ -57,7 +74,7 @@
                         $packetStatusLabels = [
                             'draft' => ['Piszkozat', 'secondary'],
                             'sent' => ['Kiküldve', 'info'],
-                            'in_progress' => ['Kitöltés folyamatban', 'warning'],
+                            'in_progress' => ['Kitöltés alatt', 'warning'],
                             'submitted' => ['Ellenőrzésre vár', 'primary'],
                             'approved' => ['Elfogadva', 'success'],
                             'closed' => ['Lezárva', 'dark'],
@@ -68,28 +85,6 @@
                         ?>
                         <span class="badge badge-<?= esc($packetStatusClass) ?>"><?= esc($packetStatusLabel) ?></span>
                     </p>
-
-                    <?php if ($relation): ?>
-                        <strong>Jogviszony státusz</strong>
-                        <p>
-                            <?php
-                            $relationStatusLabels = [
-                                'draft' => ['Piszkozat', 'secondary'],
-                                'invited' => ['Meghívó kiküldve', 'info'],
-                                'onboarding' => ['Beléptetés alatt', 'warning'],
-                                'in_progress' => ['Kitöltés folyamatban', 'warning'],
-                                'declarations_submitted' => ['Nyilatkozatok ellenőrzésre várnak', 'primary'],
-                                'completed' => ['Nyilatkozatok elfogadva', 'success'],
-                                'active' => ['Aktív', 'success'],
-                                'transferred' => ['Áthelyezve', 'info'],
-                                'closed' => ['Lezárva', 'dark'],
-                                'cancelled' => ['Törölve', 'danger'],
-                            ];
-                            [$relationStatusLabel, $relationStatusClass] = $relationStatusLabels[$relation->status] ?? [$relation->status ?: '-', 'secondary'];
-                            ?>
-                            <span class="badge badge-<?= esc($relationStatusClass) ?>"><?= esc($relationStatusLabel) ?></span>
-                        </p>
-                    <?php endif; ?>
 
                     <?php if (hasPermissions('declarations_admin_override') && in_array((string) $packet->status, ['approved', 'completed'], true)): ?>
                         <?= form_open('declarations/packets/' . $packet->id . '/close', ['class' => 'mb-3']) ?>
@@ -190,7 +185,7 @@
                                                             · Ellenőrzi: <?= $item->template_review_role === 'payroll' ? 'Munkaügy' : 'Toborzó' ?>
                                                         <?php endif; ?>
                                                         <?php if (!empty($item->template_tax_year)): ?>
-                                                            · Adóév: <?= esc($item->template_tax_year) ?>
+                                                            · Nyilatkozati év: <?= esc($item->template_tax_year) ?>
                                                         <?php endif; ?>
                                                         <?php if (!empty($item->template_version)): ?>
                                                             · Verzió: <?= esc($item->template_version) ?>
@@ -367,7 +362,7 @@
                     <?php endif; ?>
 
                     <div class="text-muted small mt-2">
-                        A meghívó link 14 napig érvényes. Ha több dokumentumot nyit újra, előbb nyissa újra mindet, majd egyszer küldjön új linket.
+                        A meghívó link 14 napig érvényes. Ha több nyilatkozatot nyit újra, előbb nyissa újra mindet, majd egyszer küldjön új linket.
                     </div>
                 </div>
             </div>
@@ -409,7 +404,7 @@
                             Ezt akkor használja, ha a kitöltő nem találja a korábbi e-mailt,
                             vagy új hozzáférést szeretne biztosítani.
                         <?php else: ?>
-                            A rendszer létrehozza és e-mailben kiküldi az első dokumentumkitöltő linket.
+                            A rendszer létrehozza és e-mailben kiküldi az első nyilatkozatkitöltő linket.
                         <?php endif; ?>
                     </div>
                 </div>

@@ -7,6 +7,7 @@ use App\Modules\Declarations\Models\PersonModel;
 use App\Modules\Declarations\Presenters\PersonTablePresenter;
 use App\Modules\Declarations\Services\DeclarationPacketService;
 use App\Modules\Declarations\Services\EmploymentRelationService;
+use App\Modules\Declarations\Services\IntranetUserLinkService;
 use App\Modules\Declarations\Services\PersonService;
 use App\Modules\Declarations\Services\RecruiterService;
 use Hermawan\DataTables\DataTable;
@@ -23,6 +24,7 @@ class PersonsController extends AdminBaseController
     protected DeclarationPacketService $declarationPacketService;
     protected PersonTablePresenter $personTablePresenter;
     protected RecruiterService $recruiterService;
+    protected IntranetUserLinkService $intranetUserLinkService;
 
     public function __construct()
     {
@@ -31,6 +33,7 @@ class PersonsController extends AdminBaseController
         $this->declarationPacketService = new DeclarationPacketService();
         $this->personTablePresenter = new PersonTablePresenter();
         $this->recruiterService = new RecruiterService();
+        $this->intranetUserLinkService = new IntranetUserLinkService();
     }
 
     public function index()
@@ -317,25 +320,27 @@ class PersonsController extends AdminBaseController
         $locations = $this->employmentRelationService->getActiveLocations();
         $recruiters = $this->recruiterService->getRecruiters();
         $recruiterDisplayNames = $this->recruiterService->getRecruiterDisplayMap();
+        $linkedIntranetUser = $this->intranetUserLinkService->linkedUserForPerson($id);
+        $intranetUserCandidates = $linkedIntranetUser ? [] : $this->intranetUserLinkService->candidatesForPerson($id);
         $templates = $this->declarationPacketService->getAvailableTemplates((int) date('Y'));
         $taxTemplates = $this->declarationPacketService->getCandidateSelectableTaxTemplates((int) date('Y'));
         $packets = $this->declarationPacketService->findPacketsByPersonId($id);
-        $sentPacketRelationIds = [];
-        $sentPacketCompanyYearKeys = [];
+        $openPacketRelationIds = [];
+        $openPacketCompanyIds = [];
         $draftPacketsByRelationId = [];
 
         foreach ($packets as $packet) {
             $relationId = (int) $packet->employment_relation_id;
-            $companyYearKey = (int) $packet->company_id . ':' . (int) ($packet->tax_year ?: date('Y'));
+            $companyId = (int) $packet->company_id;
+            $isOpenPacket = !in_array((string) $packet->status, ['closed', 'cancelled'], true);
 
             if ((string) $packet->status === 'draft') {
                 $draftPacketsByRelationId[$relationId] ??= $packet;
-                continue;
             }
 
-            if ((string) $packet->status !== 'cancelled') {
-                $sentPacketRelationIds[$relationId] = true;
-                $sentPacketCompanyYearKeys[$companyYearKey] = true;
+            if ($isOpenPacket) {
+                $openPacketRelationIds[$relationId] = true;
+                $openPacketCompanyIds[$companyId] = true;
             }
         }
 
@@ -346,13 +351,58 @@ class PersonsController extends AdminBaseController
             'locations' => $locations,
             'recruiters' => $recruiters,
             'recruiterDisplayNames' => $recruiterDisplayNames,
+            'linkedIntranetUser' => $linkedIntranetUser,
+            'intranetUserCandidates' => $intranetUserCandidates,
             'templates' => $templates,
             'taxTemplates' => $taxTemplates,
             'packets' => $packets,
-            'sentPacketRelationIds' => $sentPacketRelationIds,
-            'sentPacketCompanyYearKeys' => $sentPacketCompanyYearKeys,
+            'openPacketRelationIds' => $openPacketRelationIds,
+            'openPacketCompanyIds' => $openPacketCompanyIds,
             'draftPacketsByRelationId' => $draftPacketsByRelationId,
         ]);
+    }
+
+    public function linkIntranetUser(int $personId)
+    {
+        $this->permissionCheck('declarations_persons_edit');
+        postAllowed();
+
+        try {
+            $this->intranetUserLinkService->linkExistingUser(
+                $personId,
+                (int) $this->request->getPost('user_id')
+            );
+
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sSuccess', 'Intranet felhasználó kapcsolva.');
+        } catch (Throwable $e) {
+            $this->logFailure('person_intranet_link', $e);
+
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sError', $e->getMessage());
+        }
+    }
+
+    public function prepareIntranetUserAdd(int $personId)
+    {
+        $this->permissionCheck('declarations_persons_edit');
+        postAllowed();
+
+        try {
+            $this->intranetUserLinkService->flashUserAddPrefillForPerson($personId);
+
+            return redirect()
+                ->to(url('users/add'))
+                ->with('sInfo', 'Az intranet user létrehozó űrlapot előtöltöttük a nyilatkozati személy ismert adataival.');
+        } catch (Throwable $e) {
+            $this->logFailure('person_intranet_user_add_prefill', $e);
+
+            return redirect()
+                ->to(url('declarations/persons/' . $personId))
+                ->with('sError', $e->getMessage());
+        }
     }
 
     public function createRelation(int $personId)

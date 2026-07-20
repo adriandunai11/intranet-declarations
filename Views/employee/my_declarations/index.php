@@ -23,13 +23,36 @@ $groupLabels = [
     'employment' => 'Munkaviszonyhoz kapcsolódó nyilatkozatok',
     'other' => 'Egyéb nyilatkozatok',
 ];
+
+$packetFlowLabels = [
+    'onboarding' => 'Beléptetés',
+    'self_service' => 'Saját indítás',
+    'self_service_tax' => 'Saját adóügyi',
+    'self_service_change' => 'Saját adatmódosítás',
+    'admin_manual' => 'Munkaügyi kiküldés',
+];
+
+$packetStatusLabels = [
+    'draft' => 'Előkészítés alatt',
+    'sent' => 'Kiküldve',
+    'in_progress' => 'Kitöltés alatt',
+    'submitted' => 'Ellenőrzésre vár',
+    'approved' => 'Elfogadva',
+    'closed' => 'Lezárva',
+    'completed' => 'Elfogadva',
+    'cancelled' => 'Törölve',
+];
+
+$activePackets = array_values(array_filter($packets, static function ($packet): bool {
+    return !in_array((string) ($packet->status ?? ''), ['closed', 'cancelled'], true);
+}));
 ?>
 <section class="content-header">
     <div class="container-fluid">
         <div class="row mb-2">
             <div class="col-sm-8">
                 <h1>Nyilatkozataim</h1>
-                <p class="text-muted mb-0">Saját indítású adóügyi és adatváltozási nyilatkozatok.</p>
+                <p class="text-muted mb-0">Saját indítású éves, adóügyi és adatváltozási nyilatkozatok.</p>
             </div>
         </div>
     </div>
@@ -75,7 +98,13 @@ $groupLabels = [
                                 Jelenleg nincs munkavállaló által indítható online nyilatkozat.
                             </div>
                         <?php else: ?>
-                            <form method="post" action="<?= esc(url('my-declarations/start')) ?>">
+                            <?php if (!empty($activePackets)): ?>
+                                <div class="alert alert-info mb-0">
+                                    Már van nyitott nyilatkozatcsomagod. Amíg az nincs lezárva vagy törölve, nem indítható új csomag.
+                                    A folyamatban lévő kitöltést az e-mailben kapott linken tudod folytatni.
+                                </div>
+                            <?php else: ?>
+                            <form method="post" action="<?= esc(url('declarations/my-declarations/start')) ?>" id="employeeDeclarationStartForm">
                                 <?= csrf_field() ?>
 
                                 <div class="form-group">
@@ -91,7 +120,7 @@ $groupLabels = [
                                 </div>
 
                                 <div class="form-group">
-                                    <label for="tax_year">Adóév</label>
+                                    <label for="tax_year">Nyilatkozati év</label>
                                     <input type="number" name="tax_year" id="tax_year" class="form-control" min="2020" max="<?= (int) date('Y') + 2 ?>" value="<?= esc($oldTaxYear ?: $defaultTaxYear) ?>" required>
                                 </div>
 
@@ -118,11 +147,13 @@ $groupLabels = [
                                 </div>
 
                                 <div class="alert alert-info small">
-                                    A rendszer e-mailben küld egy kitöltési linket. A kitöltés ugyanazon a public felületen történik, mint a beléptetési nyilatkozatoknál.
+                                    A rendszer e-mailben küld egy kitöltési linket. Amíg van nyitott csomagod, új csomag nem indítható.
+                                    A kitöltés ugyanazon a védett public felületen történik, mint a beléptetési nyilatkozatoknál.
                                 </div>
 
                                 <button type="submit" class="btn btn-primary">Kitöltési link küldése</button>
                             </form>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -138,7 +169,8 @@ $groupLabels = [
                             <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Adóév</th>
+                                <th>Típus</th>
+                                <th>Nyilatkozati év</th>
                                 <th>Státusz</th>
                                 <th>Létrehozva</th>
                                 <th>Beküldve / zárva</th>
@@ -147,14 +179,16 @@ $groupLabels = [
                             <tbody>
                             <?php if (empty($packets)): ?>
                                 <tr>
-                                    <td colspan="5" class="text-muted">Még nincs nyilatkozatcsomag.</td>
+                                    <td colspan="6" class="text-muted">Még nincs nyilatkozatcsomag.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($packets as $packet): ?>
                                     <tr>
                                         <td>#<?= (int) $packet->id ?></td>
+                                        <?php $packetFlowType = (string) ($packet->flow_type ?? ''); ?>
+                                        <td><?= esc($packetFlowType !== '' ? ($packetFlowLabels[$packetFlowType] ?? $packetFlowType) : '-') ?></td>
                                         <td><?= esc($packet->tax_year ?: '-') ?></td>
-                                        <td><span class="badge badge-secondary"><?= esc($packet->status ?? '-') ?></span></td>
+                                        <td><span class="badge badge-secondary"><?= esc($packetStatusLabels[(string) ($packet->status ?? '')] ?? ($packet->status ?? '-')) ?></span></td>
                                         <td><?= esc($packet->created_at ?? '-') ?></td>
                                         <td><?= esc($packet->completed_at ?? '-') ?></td>
                                     </tr>

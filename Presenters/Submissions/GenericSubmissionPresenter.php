@@ -56,6 +56,7 @@ class GenericSubmissionPresenter implements SubmissionPresenterInterface
             'template_name',
             'template_version',
             'template_fields',
+            'statement_fields',
             'tax_fields',
             'repeaters',
             'display_rows',

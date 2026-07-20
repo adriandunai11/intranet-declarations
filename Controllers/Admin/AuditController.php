@@ -82,7 +82,7 @@ class AuditController extends AdminBaseController
             'subjectMeta' => [
                 'Dolgozó' => $person && method_exists($person, 'fullName') ? $person->fullName() : '-',
                 'Cég' => $company->name ?? ('#' . ($packet->company_id ?? '-')),
-                'Adóév' => $packet->tax_year ?: '-',
+                'Nyilatkozati év' => $packet->tax_year ?: '-',
             ],
             'backUrl' => url('declarations/packets/' . $packetId),
             'backLabel' => 'Vissza a csomaghoz',

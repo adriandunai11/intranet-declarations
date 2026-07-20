@@ -15,6 +15,8 @@ $routes->group('declarations', [
     $routes->get('persons/(:num)', 'PersonsController::show/$1');
     $routes->get('persons/(:num)/audit', 'AuditController::person/$1');
     $routes->get('persons/(:num)/json', 'PersonsController::json/$1');
+    $routes->post('persons/(:num)/intranet/link', 'PersonsController::linkIntranetUser/$1');
+    $routes->post('persons/(:num)/intranet/user-add', 'PersonsController::prepareIntranetUserAdd/$1');
     $routes->post('persons/(:num)/relations/create', 'PersonsController::createRelation/$1');
     $routes->post('persons/(:num)/relations/(:num)/close', 'PersonsController::closeRelation/$1/$2');
     $routes->post('persons/(:num)/relations/(:num)/reopen', 'PersonsController::reopenRelation/$1/$2');
@@ -49,7 +51,7 @@ $routes->group('', [
     $routes->post('start/(:segment)/item/(:num)', 'InvitationController::submitItem/$1/$2');
 });
 
-$routes->group('my-declarations', [
+$routes->group('declarations/my-declarations', [
     'namespace' => 'App\Modules\Declarations\Controllers\Employee',
 ], static function (RouteCollection $routes): void {
     $routes->get('', 'MyDeclarationsController::index');

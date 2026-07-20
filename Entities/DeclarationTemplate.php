@@ -45,7 +45,6 @@ class DeclarationTemplate extends Entity
         'parent_template_id' => '?integer',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
-        'needs_signature' => 'boolean',
         'is_candidate_selectable' => 'boolean',
     ];
 
@@ -58,7 +57,8 @@ class DeclarationTemplate extends Entity
         }
 
         if (!empty($this->attributes['version'])) {
-            $name .= ' · v' . $this->attributes['version'];
+            $version = trim((string) $this->attributes['version']);
+            $name .= ' · ' . (preg_match('/^v/i', $version) ? $version : 'v' . $version);
         }
 
         return trim($name);
@@ -80,63 +80,8 @@ class DeclarationTemplate extends Entity
         return is_array($decoded) ? $decoded : [];
     }
 
-    public function detail(string $key, $default = null)
-    {
-        $details = $this->details();
-
-        return array_key_exists($key, $details) ? $details[$key] : $default;
-    }
-
-    public function longDescription(): string
-    {
-        $details = $this->details();
-
-        return trim((string) ($details['long_description'] ?? $this->attributes['description'] ?? ''));
-    }
-
-    public function shortDescription(): string
-    {
-        $details = $this->details();
-
-        return trim((string) ($details['short_description'] ?? $this->attributes['description'] ?? ''));
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function keywords(): array
-    {
-        $keywords = $this->detail('keywords', []);
-
-        if (!is_array($keywords)) {
-            return [];
-        }
-
-        return array_values(array_filter(array_map('strval', $keywords)));
-    }
-
     public function isActive(): bool
     {
         return (bool) ($this->attributes['is_active'] ?? false);
-    }
-
-    public function isTaxDeclaration(): bool
-    {
-        return ($this->attributes['declaration_group'] ?? null) === self::GROUP_TAX;
-    }
-
-    public function isRecruiterReviewed(): bool
-    {
-        return ($this->attributes['review_role'] ?? null) === self::REVIEW_ROLE_RECRUITER;
-    }
-
-    public function isPayrollReviewed(): bool
-    {
-        return ($this->attributes['review_role'] ?? null) === self::REVIEW_ROLE_PAYROLL;
-    }
-
-    public function needsSignature(): bool
-    {
-        return (bool) ($this->attributes['needs_signature'] ?? false);
     }
 }

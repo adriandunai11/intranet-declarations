@@ -93,6 +93,7 @@ class InvitationController extends BaseController
                 'optionalTaxTemplates' => $optionalTaxTemplates,
                 'optionalTaxTemplateSupport' => $optionalTaxTemplateSupport,
                 'canFinalize' => $this->submissionService->canFinalize($context),
+                'removableItemIds' => $this->removableItemIds($context, $items),
                 'summaryRowsByItemId' => $this->summaryRowsByItemId($context, $items),
             ]);
         } catch (Throwable $e) {
@@ -197,7 +198,7 @@ class InvitationController extends BaseController
             if (!$this->submissionService->canFinalize($context)) {
                 return redirect()
                     ->to($this->urlService->start($context->token))
-                    ->with('sError', 'Az ellenőrzéshez először minden csomagban lévő dokumentumot ki kell tölteni, vagy a nem kért választható nyilatkozatot el kell távolítani.');
+                    ->with('sError', 'Az ellenőrzéshez először minden csomagban lévő nyilatkozatot ki kell tölteni, vagy a nem kért választható nyilatkozatot el kell távolítani.');
             }
 
             $items = $this->submissionService->getItemsForContext($context);
@@ -216,6 +217,7 @@ class InvitationController extends BaseController
                 'itemUrls' => $itemUrls,
                 'startUrl' => $this->urlService->start($context->token),
                 'finalizeUrl' => $this->urlService->finalize($context->token),
+                'removableItemIds' => $this->removableItemIds($context, $items),
                 'summaryRowsByItemId' => $this->summaryRowsByItemId($context, $items),
             ]);
         } catch (Throwable $e) {
@@ -451,6 +453,19 @@ class InvitationController extends BaseController
         }
 
         return $rowsByItemId;
+    }
+
+    protected function removableItemIds(InvitationContext $context, array $items): array
+    {
+        $itemIds = [];
+
+        foreach ($items as $item) {
+            if ($this->submissionService->canRemoveCandidateSelectedItem($context, $item)) {
+                $itemIds[(int) $item->id] = true;
+            }
+        }
+
+        return $itemIds;
     }
 
     protected function findOpenPersonalDataItem(array $items, object $packet): ?object

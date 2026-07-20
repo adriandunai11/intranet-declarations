@@ -33,7 +33,7 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
             <div class="helper-title">Szükséges adatok</div>
             <ul>
                 <li>Számlatulajdonos neve</li>
-                <li>Bank neve</li>
+                <li>Bank neve, ha nem ismerhető fel automatikusan</li>
                 <li>16 vagy 24 számjegyű bankszámlaszám</li>
             </ul>
         </div>

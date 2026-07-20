@@ -42,19 +42,6 @@ class DeclarationAuditService
         ]);
     }
 
-    public function statusChanged(
-        string $entityType,
-        int $entityId,
-        ?string $oldStatus,
-        ?string $newStatus,
-        array $context = []
-    ): void {
-        $context['old_status'] = $oldStatus;
-        $context['new_status'] = $newStatus;
-
-        $this->log($entityType . '_status_changed', $entityType, $entityId, $context);
-    }
-
     private function currentUserId(): ?int
     {
         if (!function_exists('logged')) {

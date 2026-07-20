@@ -28,26 +28,6 @@ class DeclarationInvitationModel extends Model
         'revoked_at',
     ];
 
-    public function findActiveByRawToken(string $rawToken): ?DeclarationInvitation
-    {
-        $tokenHash = hash('sha256', $rawToken);
-
-        $invitation = $this->where('token_hash', $tokenHash)
-            ->whereNotIn('status', [
-                DeclarationInvitation::STATUS_EXPIRED,
-                DeclarationInvitation::STATUS_CANCELLED,
-                DeclarationInvitation::STATUS_REVOKED,
-                DeclarationInvitation::STATUS_COMPLETED,
-            ])
-            ->first();
-
-        if (!$invitation || $invitation->isExpired()) {
-            return null;
-        }
-
-        return $invitation;
-    }
-
     public function findActiveByPacketId(int $packetId)
     {
         return $this->where('packet_id', $packetId)
