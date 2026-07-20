@@ -7,8 +7,11 @@ $packetStatus = (string) ($packet->status ?? '');
 $canModifyCompletedItems = in_array($packetStatus, ['draft', 'sent', 'in_progress'], true);
 $isPacketClosedForCandidate = in_array($packetStatus, ['submitted', 'approved', 'closed', 'completed'], true);
 $items = $items ?? [];
+$optionalTaxTemplates = $optionalTaxTemplates ?? [];
 $summaryRowsByItemId = $summaryRowsByItemId ?? [];
 $removableItemIds = $removableItemIds ?? [];
+$packetFlowType = (string) ($packet->flow_type ?? '');
+$showOptionalTaxPanel = $packetFlowType !== 'onboarding' || !empty($optionalTaxTemplates);
 
 $templateDetails = static function (object $template): array {
     if (method_exists($template, 'details')) {
@@ -351,46 +354,48 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             <?php endif; ?>
         </section>
 
-        <section class="content-card optional-tax-panel" id="optional-tax">
-            <div class="section-heading">
-                <div>
-                    <h2>Választható adóügyi nyilatkozatok</h2>
-                    <p class="section-note">Csak azt válassza ki, amely Önre vonatkozik, vagy amelyről nyilatkozni szeretne.</p>
+        <?php if ($showOptionalTaxPanel): ?>
+            <section class="content-card optional-tax-panel" id="optional-tax">
+                <div class="section-heading">
+                    <div>
+                        <h2>Választható adóügyi nyilatkozatok</h2>
+                        <p class="section-note">Csak azt válassza ki, amely Önre vonatkozik, vagy amelyről nyilatkozni szeretne.</p>
+                    </div>
                 </div>
-            </div>
 
-            <?php if (empty($optionalTaxTemplates)): ?>
-                <div class="empty-state">Jelenleg nincs további választható adóügyi nyilatkozat.</div>
-            <?php else: ?>
-                <ul class="optional-list">
-                    <?php foreach ($optionalTaxTemplates as $template): ?>
-                        <?php $dialogId = 'template-detail-' . (int) $template->id; ?>
-                        <li class="task-item">
-                            <span class="state-dot" aria-hidden="true"></span>
-                            <div>
-                                <div class="task-title"><?= esc($template->name) ?></div>
-                                <div class="task-meta">
-                                    <?= esc($templateMetaText($template)) ?>
+                <?php if (empty($optionalTaxTemplates)): ?>
+                    <div class="empty-state">Jelenleg nincs további választható adóügyi nyilatkozat.</div>
+                <?php else: ?>
+                    <ul class="optional-list">
+                        <?php foreach ($optionalTaxTemplates as $template): ?>
+                            <?php $dialogId = 'template-detail-' . (int) $template->id; ?>
+                            <li class="task-item">
+                                <span class="state-dot" aria-hidden="true"></span>
+                                <div>
+                                    <div class="task-title"><?= esc($template->name) ?></div>
+                                    <div class="task-meta">
+                                        <?= esc($templateMetaText($template)) ?>
+                                    </div>
+                                    <div class="task-meta"><?= esc($templateShortDescription($template) ?: 'Választható adóügyi nyilatkozat.') ?></div>
                                 </div>
-                                <div class="task-meta"><?= esc($templateShortDescription($template) ?: 'Választható adóügyi nyilatkozat.') ?></div>
-                            </div>
-                            <div class="task-side task-side-horizontal">
-                                <?php $isSupported = (bool) ($optionalTaxTemplateSupport[(int) $template->id] ?? false); ?>
-                                <?php if ($isSupported): ?>
-                                    <form method="post" action="<?= esc($startUrl . '/tax-template/' . (int) $template->id . '/select') ?>">
-                                        <?= csrf_field() ?>
-                                        <button type="submit" class="btn btn-secondary btn-sm">Kiválaszt</button>
-                                    </form>
-                                <?php else: ?>
-                                    <span class="badge badge-default">Előkészítés alatt</span>
-                                <?php endif; ?>
-                                <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($dialogId) ?>">Részletek</button>
-                            </div>
-                        </li>
-                    <?php endforeach; ?>
-                </ul>
-            <?php endif; ?>
-        </section>
+                                <div class="task-side task-side-horizontal">
+                                    <?php $isSupported = (bool) ($optionalTaxTemplateSupport[(int) $template->id] ?? false); ?>
+                                    <?php if ($isSupported): ?>
+                                        <form method="post" action="<?= esc($startUrl . '/tax-template/' . (int) $template->id . '/select') ?>">
+                                            <?= csrf_field() ?>
+                                            <button type="submit" class="btn btn-secondary btn-sm">Kiválaszt</button>
+                                        </form>
+                                    <?php else: ?>
+                                        <span class="badge badge-default">Előkészítés alatt</span>
+                                    <?php endif; ?>
+                                    <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($dialogId) ?>">Részletek</button>
+                                </div>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
     </main>
 </div>
 

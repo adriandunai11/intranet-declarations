@@ -53,16 +53,16 @@
 
                     <?php
                     $packetFlowLabels = [
-                        'onboarding' => 'Beléptetés',
-                        'self_service' => 'Saját indítás',
-                        'self_service_tax' => 'Saját adóügyi',
-                        'self_service_change' => 'Saját adatmódosítás',
+                        'onboarding' => 'Első beléptetési csomag',
+                        'self_service' => 'Munkavállalói önkiszolgáló',
+                        'self_service_tax' => 'Munkavállalói adóügyi nyilatkozat',
+                        'self_service_change' => 'Munkavállalói adatmódosítás',
                         'admin_manual' => 'Munkaügyi kiküldés',
                     ];
                     $packetFlowType = (string) ($packet->flow_type ?? '');
                     ?>
                     <?php if ($packetFlowType !== ''): ?>
-                        <strong>Csomag típusa</strong>
+                        <strong>Indítás módja</strong>
                         <p class="text-muted">
                             <?= esc($packetFlowLabels[$packetFlowType] ?? $packetFlowType) ?>
                         </p>
@@ -123,7 +123,7 @@
                         <?php else: ?>
                             <?= form_open('declarations/packets/' . $packet->id . '/items/add', ['class' => 'form-inline']) ?>
                             <?= csrf_field() ?>
-                            <label for="add_template_id" class="mr-2">Kimaradt nyilatkozat</label>
+                            <label for="add_template_id" class="mr-2">Nyilatkozat hozzáadása</label>
                             <select name="template_id" id="add_template_id" class="form-control mr-2 mb-2" required>
                                 <option value="">Válassz nyilatkozatot...</option>
                                 <?php foreach ($editableTemplates as $template): ?>
@@ -180,7 +180,7 @@
                                                 <div>
                                                     <strong><?= esc($item->template_name ?: '-') ?></strong>
                                                     <div class="text-muted small mt-1">
-                                                        <?= esc($item->template_code ?: '-') ?>
+                                                        Azonosító: <?= esc($item->template_code ?: '-') ?>
                                                         <?php if (!empty($item->template_review_role)): ?>
                                                             · Ellenőrzi: <?= $item->template_review_role === 'payroll' ? 'Munkaügy' : 'Toborzó' ?>
                                                         <?php endif; ?>

@@ -93,7 +93,7 @@ $templateMetaText = static function (object $template) use ($templateValue, $cat
                 <div class="eyebrow">Beküldés előtt</div>
                 <h1>Összes kitöltött adat</h1>
                 <p class="lead">
-                    Itt egyben látható minden mentett nyilatkozat. A végleges beküldés után a kitöltő már nem tudja módosítani az adatokat, csak admini visszanyitással.
+                    Itt egyben látható minden mentett nyilatkozat. A végleges beküldés után a kitöltő már nem tudja módosítani az adatokat, csak munkaügyi visszanyitás után.
                 </p>
             </div>
             <span class="status-pill">Ellenőrzés</span>

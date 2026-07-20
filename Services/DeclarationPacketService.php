@@ -128,7 +128,9 @@ class DeclarationPacketService
             throw new RuntimeException('Legalább egy nyilatkozatot ki kell választani.');
         }
 
-        $templateIds = $this->withPersonalDataTemplate($templateIds);
+        if ($this->packetRequiresPersonalDataTemplate($flowType)) {
+            $templateIds = $this->withPersonalDataTemplate($templateIds);
+        }
 
         $templates = [];
         foreach ($templateIds as $templateId) {
@@ -301,7 +303,7 @@ class DeclarationPacketService
         }
 
         if (!$relation) {
-            throw new RuntimeException('A beléptetési folyamat nem található.');
+            throw new RuntimeException('A csomaghoz kapcsolódó jogviszony nem található.');
         }
 
         $this->assertNoBlockingPacketForRelation(
@@ -309,7 +311,9 @@ class DeclarationPacketService
             (int) $packet->id
         );
 
-        $this->assertPacketContainsPersonalDataItem((int) $packet->id);
+        if ($this->packetRequiresPersonalDataTemplate((string) ($packet->flow_type ?? ''))) {
+            $this->assertPacketContainsPersonalDataItem((int) $packet->id);
+        }
 
         $candidateEmail = trim((string) ($person->email ?? ''));
 
@@ -387,6 +391,9 @@ class DeclarationPacketService
                 EmploymentRelation::STATUS_DRAFT,
                 EmploymentRelation::STATUS_ONBOARDING,
                 EmploymentRelation::STATUS_INVITED,
+                EmploymentRelation::STATUS_IN_PROGRESS,
+                EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
+                EmploymentRelation::STATUS_COMPLETED,
             ], true)) {
                 $this->relationModel->updateStatus(
                     (int) $packet->employment_relation_id,
@@ -737,6 +744,11 @@ class DeclarationPacketService
     private function normalizeTaxYear(?int $taxYear): int
     {
         return $taxYear ?: (int) date('Y');
+    }
+
+    private function packetRequiresPersonalDataTemplate(string $flowType): bool
+    {
+        return $flowType === DeclarationPacket::FLOW_ONBOARDING;
     }
 
     private function withPersonalDataTemplate(array $templateIds): array

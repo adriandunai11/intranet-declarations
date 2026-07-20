@@ -98,6 +98,7 @@ class EmployeeDeclarationSelfService
         $plainToken = $this->tokenService->generatePlainToken();
         $tokenHash = $this->tokenService->hashToken($plainToken);
         $expiresAt = (new DateTime('+14 days'))->format('Y-m-d H:i:s');
+        $oldRelationStatus = (string) ($relation->status ?? '');
 
         $db = db_connect();
         $db->transBegin();
@@ -154,6 +155,10 @@ class EmployeeDeclarationSelfService
                 throw new RuntimeException(!empty($errors) ? implode(' ', $errors) : 'A kitöltési link létrehozása sikertelen.');
             }
 
+            if ($this->canMoveRelationToSent($oldRelationStatus)) {
+                $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_INVITED);
+            }
+
             $this->auditLogModel->logAction(
                 'employee_self_service_packet_created',
                 'declaration_packet',
@@ -173,6 +178,10 @@ class EmployeeDeclarationSelfService
                     'template_ids' => array_map(static fn($template): int => (int) $template->id, $templates),
                     'invitation_id' => (int) $invitationId,
                     'email' => $candidateEmail,
+                    'old_relation_status' => $oldRelationStatus,
+                    'current_relation_status' => $this->canMoveRelationToSent($oldRelationStatus)
+                        ? EmploymentRelation::STATUS_INVITED
+                        : $oldRelationStatus,
                 ]
             );
 
@@ -222,7 +231,7 @@ class EmployeeDeclarationSelfService
         }
 
         if (!$person) {
-            throw new RuntimeException('A bejelentkezett felhasználóhoz nincs összekapcsolt nyilatkozati személy rekord. Ha már van személy adatlapod, munkaügy tudja összekapcsolni az intranet usereddel.');
+            throw new RuntimeException('A bejelentkezett felhasználóhoz nincs összekapcsolt nyilatkozati személy rekord. Ha már van személy adatlapod, munkaügy tudja összekapcsolni az intranet felhasználóddal.');
         }
 
         return $person;
@@ -324,6 +333,18 @@ class EmployeeDeclarationSelfService
             ->where('person_id', $personId)
             ->where('status !=', DeclarationPacket::STATUS_CANCELLED)
             ->countAllResults() > 0;
+    }
+
+    private function canMoveRelationToSent(string $status): bool
+    {
+        return in_array($status, [
+            EmploymentRelation::STATUS_DRAFT,
+            EmploymentRelation::STATUS_ONBOARDING,
+            EmploymentRelation::STATUS_INVITED,
+            EmploymentRelation::STATUS_IN_PROGRESS,
+            EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
+            EmploymentRelation::STATUS_COMPLETED,
+        ], true);
     }
 
     private function assertNoOpenPacketForPerson(int $personId): void

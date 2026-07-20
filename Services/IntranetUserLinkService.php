@@ -235,7 +235,7 @@ class IntranetUserLinkService
 
                 if ($linkedUserId > 0 && $linkedUserId !== $userId) {
                     $result['skipped']++;
-                    $result['errors'][] = 'Felhasználó #' . $userId . ': az egyező nyilatkozati személy már másik intranet userhez kapcsolt.';
+                    $result['errors'][] = 'Felhasználó #' . $userId . ': az egyező nyilatkozati személy már másik intranet felhasználóhoz kapcsolt.';
                     continue;
                 }
 

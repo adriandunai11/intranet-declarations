@@ -184,7 +184,7 @@ class PacketReviewService
                     null,
                     $oldPacketStatus,
                     DeclarationPacket::STATUS_IN_PROGRESS,
-                    'Nyilatkozat elutasítása miatt a csomag újra folyamatban állapotba került.',
+                    'Nyilatkozat elutasítása miatt a csomag újra kitöltés alatt állapotba került.',
                     [
                         'person_id' => (int) $packet->person_id,
                         'employment_relation_id' => (int) $packet->employment_relation_id,
@@ -192,7 +192,7 @@ class PacketReviewService
                 );
             }
 
-            if ($relation && $relation->isOpen()) {
+            if ($relation && $this->canMoveRelationToInProgress($relation)) {
                 $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
 
                 if ($oldRelationStatus !== EmploymentRelation::STATUS_IN_PROGRESS) {
@@ -204,7 +204,7 @@ class PacketReviewService
                         null,
                         $oldRelationStatus,
                         EmploymentRelation::STATUS_IN_PROGRESS,
-                        'Nyilatkozat elutasítása miatt a beléptetési folyamat újra folyamatban állapotba került.',
+                        'Nyilatkozat elutasítása miatt a kapcsolódó nyilatkozati folyamat újra kitöltés alatt állapotba került.',
                         [
                             'person_id' => (int) $packet->person_id,
                             'employment_relation_id' => (int) $relation->id,
@@ -316,7 +316,7 @@ class PacketReviewService
                     null,
                     $oldPacketStatus,
                     DeclarationPacket::STATUS_IN_PROGRESS,
-                    'Admin újranyitás miatt a csomag újra folyamatban állapotba került.',
+                    'Újranyitás miatt a csomag újra kitöltés alatt állapotba került.',
                     [
                         'person_id' => (int) $packet->person_id,
                         'employment_relation_id' => (int) $packet->employment_relation_id,
@@ -324,7 +324,7 @@ class PacketReviewService
                 );
             }
 
-            if ($relation && $relation->isOpen()) {
+            if ($relation && $this->canMoveRelationToInProgress($relation)) {
                 $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
 
                 if ($oldRelationStatus !== EmploymentRelation::STATUS_IN_PROGRESS) {
@@ -336,7 +336,7 @@ class PacketReviewService
                         null,
                         $oldRelationStatus,
                         EmploymentRelation::STATUS_IN_PROGRESS,
-                        'Admin újranyitás miatt a beléptetési folyamat újra folyamatban állapotba került.',
+                        'Újranyitás miatt a kapcsolódó nyilatkozati folyamat újra kitöltés alatt állapotba került.',
                         [
                             'person_id' => (int) $packet->person_id,
                             'employment_relation_id' => (int) $relation->id,
@@ -423,7 +423,7 @@ class PacketReviewService
 
         $relation = $this->relationModel->find((int) $packet->employment_relation_id);
 
-        if ($relation && $relation->isOpen()) {
+        if ($relation && $this->canMoveRelationToCompleted($relation)) {
             $oldRelationStatus = (string) $relation->status;
             $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_COMPLETED);
 
@@ -445,6 +445,30 @@ class PacketReviewService
             }
         }
 
+    }
+
+    private function canMoveRelationToInProgress(EmploymentRelation $relation): bool
+    {
+        return in_array((string) $relation->status, [
+            EmploymentRelation::STATUS_DRAFT,
+            EmploymentRelation::STATUS_ONBOARDING,
+            EmploymentRelation::STATUS_INVITED,
+            EmploymentRelation::STATUS_IN_PROGRESS,
+            EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
+            EmploymentRelation::STATUS_COMPLETED,
+        ], true);
+    }
+
+    private function canMoveRelationToCompleted(EmploymentRelation $relation): bool
+    {
+        return in_array((string) $relation->status, [
+            EmploymentRelation::STATUS_DRAFT,
+            EmploymentRelation::STATUS_ONBOARDING,
+            EmploymentRelation::STATUS_INVITED,
+            EmploymentRelation::STATUS_IN_PROGRESS,
+            EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
+            EmploymentRelation::STATUS_COMPLETED,
+        ], true);
     }
 
     private function allPacketItemsAccepted(int $packetId): bool

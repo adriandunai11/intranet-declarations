@@ -25,9 +25,9 @@ $groupLabels = [
 ];
 
 $packetFlowLabels = [
-    'onboarding' => 'Beléptetés',
-    'self_service' => 'Saját indítás',
-    'self_service_tax' => 'Saját adóügyi',
+    'onboarding' => 'Első beléptetési csomag',
+    'self_service' => 'Saját indítású csomag',
+    'self_service_tax' => 'Saját adóügyi nyilatkozat',
     'self_service_change' => 'Saját adatmódosítás',
     'admin_manual' => 'Munkaügyi kiküldés',
 ];
@@ -169,7 +169,7 @@ $activePackets = array_values(array_filter($packets, static function ($packet): 
                             <thead>
                             <tr>
                                 <th>#</th>
-                                <th>Típus</th>
+                                <th>Indítás módja</th>
                                 <th>Nyilatkozati év</th>
                                 <th>Státusz</th>
                                 <th>Létrehozva</th>

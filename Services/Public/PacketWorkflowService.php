@@ -92,6 +92,8 @@ class PacketWorkflowService
             if ($relation && in_array($relation->status, [
                 EmploymentRelation::STATUS_INVITED,
                 EmploymentRelation::STATUS_ONBOARDING,
+                EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
+                EmploymentRelation::STATUS_COMPLETED,
             ], true)) {
                 $oldRelationStatus = (string) $relation->status;
                 $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
@@ -216,6 +218,7 @@ class PacketWorkflowService
             EmploymentRelation::STATUS_INVITED,
             EmploymentRelation::STATUS_ONBOARDING,
             EmploymentRelation::STATUS_IN_PROGRESS,
+            EmploymentRelation::STATUS_COMPLETED,
         ], true);
     }
 }

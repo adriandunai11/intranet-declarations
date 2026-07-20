@@ -26,6 +26,8 @@
     $intranetUserCandidates = $intranetUserCandidates ?? [];
     $openPacketRelationIds = $openPacketRelationIds ?? [];
     $openPacketCompanyIds = $openPacketCompanyIds ?? [];
+    $openPacketsByRelationId = $openPacketsByRelationId ?? [];
+    $openPacketsByCompanyId = $openPacketsByCompanyId ?? [];
     $draftPacketsByRelationId = $draftPacketsByRelationId ?? [];
     $personStatusLabels = [
         'active' => ['Aktív', 'success'],
@@ -157,7 +159,7 @@
                             </div>
                         <?php else: ?>
                             <p class="text-muted">
-                                Nincs egyértelmű aktív intranet user egyezés. Új user létrehozásakor a név, telefonszám és Antra azonosító kerül előtöltésre.
+                                Nincs egyértelmű aktív intranet felhasználó egyezés. Új felhasználó létrehozásakor a név, telefonszám és Antra azonosító kerül előtöltésre.
                             </p>
                         <?php endif; ?>
 
@@ -165,13 +167,13 @@
                             <?= form_open('declarations/persons/' . (int) $person->id . '/intranet/user-add') ?>
                             <?= csrf_field() ?>
                             <button type="submit" class="btn btn-default">
-                                <i class="fas fa-user-plus pr-1"></i> Intranet user létrehozása
+                                <i class="fas fa-user-plus pr-1"></i> Intranet felhasználó létrehozása
                             </button>
                             <?= form_close() ?>
                             <div class="text-muted small mt-2">
-                                A users/add oldal nyílik meg, az ismert adatok szerveroldali előtöltéssel kerülnek át.
-                                A nyilatkozati e-mail címet nem töltjük be intranet user e-mailként.
-                                Létrehozás után az egyező aktív user itt kapcsolható a személyhez.
+                                A felhasználó-létrehozó oldal nyílik meg, az ismert adatok szerveroldali előtöltéssel kerülnek át.
+                                A nyilatkozati e-mail címet nem töltjük be intranet felhasználói e-mailként.
+                                Létrehozás után az egyező aktív felhasználó itt kapcsolható a személyhez.
                             </div>
                         <?php endif; ?>
                     <?php else: ?>
@@ -255,6 +257,8 @@
                                         $relationId = (int) $relation->id;
                                         $hasOpenPacket = !empty($openPacketRelationIds[$relationId])
                                             || !empty($openPacketCompanyIds[(int) $relation->company_id]);
+                                        $openPacket = $openPacketsByRelationId[$relationId]
+                                            ?? ($openPacketsByCompanyId[(int) $relation->company_id] ?? null);
                                         $draftPacket = $draftPacketsByRelationId[$relationId] ?? null;
                                         $isClosedRelation = in_array((string) $relation->status, ['closed', 'cancelled'], true);
                                         ?>
@@ -269,14 +273,27 @@
                                                     'invited' => ['Nyilatkozat kiküldve', 'info'],
                                                     'in_progress' => ['Nyilatkozat kitöltése alatt', 'warning'],
                                                     'declarations_submitted' => ['Nyilatkozatok ellenőrzésre várnak', 'primary'],
-                                                    'completed' => ['Nyilatkozatok elfogadva', 'success'],
+                                                    'completed' => ['Beléptetési nyilatkozatok elfogadva', 'success'],
                                                     'active' => ['Aktív dolgozó', 'success'],
                                                     'transferred' => ['Áthelyezve', 'warning'],
                                                     'closed' => ['Lezárva', 'secondary'],
                                                     'cancelled' => ['Törölve', 'danger'],
                                                 ];
+                                                $openPacketStatusLabels = [
+                                                    'draft' => ['Csomag előkészítés alatt', 'secondary'],
+                                                    'sent' => ['Nyilatkozat kiküldve', 'info'],
+                                                    'in_progress' => ['Nyilatkozat kitöltése alatt', 'warning'],
+                                                    'submitted' => ['Nyilatkozatok ellenőrzésre várnak', 'primary'],
+                                                    'approved' => ['Nyilatkozatok elfogadva', 'success'],
+                                                    'completed' => ['Nyilatkozatok elfogadva', 'success'],
+                                                ];
 
-                                                [$relationStatusLabel, $relationStatusClass] = $relationStatusLabels[$relation->status] ?? [$relation->status ?: '-', 'secondary'];
+                                                if ($openPacket && !$isClosedRelation) {
+                                                    [$relationStatusLabel, $relationStatusClass] = $openPacketStatusLabels[(string) ($openPacket->status ?? '')]
+                                                        ?? ['Nyitott nyilatkozatcsomag', 'info'];
+                                                } else {
+                                                    [$relationStatusLabel, $relationStatusClass] = $relationStatusLabels[$relation->status] ?? [$relation->status ?: '-', 'secondary'];
+                                                }
                                                 ?>
                                                 <span class="badge badge-<?= esc($relationStatusClass) ?>">
                                                     <?= esc($relationStatusLabel) ?>
@@ -455,7 +472,8 @@
                         </div>
 
                         <div class="alert alert-info mb-3">
-                            Az alap beléptetési csomag a kötelező, nem adóügyi nyilatkozatokat hozza létre.
+                            Az <strong>Alap beléptetési csomag</strong> gomb a kötelező beléptetési nyilatkozatokat hozza létre, a lenti jelölésektől függetlenül.
+                            A <strong>Kijelölt nyilatkozatokból létrehozás</strong> gomb csak az itt külön bejelölt nyilatkozatokat teszi a csomagba.
                             Adóügyi nyilatkozatot csak akkor jelölj be, ha már most biztosan szükséges; egyébként a dolgozó később saját maga is indíthatja.
                         </div>
 
@@ -485,7 +503,7 @@
                                 <div class="custom-control custom-checkbox mb-2">
                                     <input type="checkbox" class="custom-control-input"
                                         id="template_<?= (int) $relation->id ?>_<?= (int) $template->id ?>" name="template_ids[]"
-                                        value="<?= (int) $template->id ?>" <?= $template->required_policy === 'always' ? 'checked' : '' ?>>
+                                        value="<?= (int) $template->id ?>">
                                     <label class="custom-control-label"
                                         for="template_<?= (int) $relation->id ?>_<?= (int) $template->id ?>">
                                         <?= esc($template->displayName()) ?>

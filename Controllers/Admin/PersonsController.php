@@ -327,6 +327,8 @@ class PersonsController extends AdminBaseController
         $packets = $this->declarationPacketService->findPacketsByPersonId($id);
         $openPacketRelationIds = [];
         $openPacketCompanyIds = [];
+        $openPacketsByRelationId = [];
+        $openPacketsByCompanyId = [];
         $draftPacketsByRelationId = [];
 
         foreach ($packets as $packet) {
@@ -341,6 +343,8 @@ class PersonsController extends AdminBaseController
             if ($isOpenPacket) {
                 $openPacketRelationIds[$relationId] = true;
                 $openPacketCompanyIds[$companyId] = true;
+                $openPacketsByRelationId[$relationId] ??= $packet;
+                $openPacketsByCompanyId[$companyId] ??= $packet;
             }
         }
 
@@ -358,6 +362,8 @@ class PersonsController extends AdminBaseController
             'packets' => $packets,
             'openPacketRelationIds' => $openPacketRelationIds,
             'openPacketCompanyIds' => $openPacketCompanyIds,
+            'openPacketsByRelationId' => $openPacketsByRelationId,
+            'openPacketsByCompanyId' => $openPacketsByCompanyId,
             'draftPacketsByRelationId' => $draftPacketsByRelationId,
         ]);
     }
@@ -395,7 +401,7 @@ class PersonsController extends AdminBaseController
 
             return redirect()
                 ->to(url('users/add'))
-                ->with('sInfo', 'Az intranet user létrehozó űrlapot előtöltöttük a nyilatkozati személy ismert adataival.');
+                ->with('sInfo', 'Az intranet felhasználó létrehozó űrlapot előtöltöttük a nyilatkozati személy ismert adataival.');
         } catch (Throwable $e) {
             $this->logFailure('person_intranet_user_add_prefill', $e);
 
