@@ -30,7 +30,7 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
     {
         $schema = $this->schemaService->schemaFor((string) ($item->template_code ?? ''));
 
-        return (string) ($item->template_name ?: ($schema['title'] ?? 'Nyilatkozat'));
+        return (string) ($schema['title'] ?? ($item->template_name ?: 'Nyilatkozat'));
     }
 
     public function view(): string
@@ -138,7 +138,7 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
         return [
             'confirm_truth' => !empty($input['confirm_truth']) ? 1 : 0,
             'template_code' => $this->templateCode(),
-            'template_name' => (string) ($this->item->template_name ?? ($schema['title'] ?? 'Nyilatkozat')),
+            'template_name' => (string) ($schema['title'] ?? ($this->item->template_name ?? 'Nyilatkozat')),
             'template_version' => (string) ($this->item->template_version ?? ''),
             'statement_fields' => $fields,
             'repeaters' => $repeaters,
@@ -181,7 +181,7 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
             $min = $this->minimumRowsForRepeater($repeater, $fields);
 
             if (count($rows) < $min) {
-                $errors[] = 'A(z) "' . (string) ($repeater['title'] ?? $repeaterKey) . '" részben legalább ' . $min . ' sort meg kell adni.';
+                $errors[] = 'A(z) "' . (string) ($repeater['title'] ?? $repeaterKey) . '" részben legalább ' . $min . ' adatlapot meg kell adni.';
             }
 
             foreach ($rows as $index => $row) {
@@ -197,7 +197,7 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
                     $columnKey = (string) ($column['key'] ?? '');
                     $value = $row[$columnKey] ?? null;
                     $label = (string) ($column['label'] ?? $columnKey);
-                    $rowLabel = ((int) $index + 1) . '. sor';
+                    $rowLabel = ((int) $index + 1) . '. ' . (string) ($repeater['row_label'] ?? 'adatlap');
 
                     if (!empty($column['required']) && $this->isEmptyValue($value, (string) ($column['type'] ?? 'text'))) {
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mező kitöltése kötelező.';
@@ -241,6 +241,10 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
 
             foreach (($section['fields'] ?? []) as $field) {
                 if (is_array($field)) {
+                    if (is_array($section['visible_when'] ?? null)) {
+                        $field['_section_visible_when'] = $section['visible_when'];
+                    }
+
                     $fields[] = $field;
                 }
             }
@@ -303,6 +307,12 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
      */
     private function isFieldVisible(array $field, array $fields): bool
     {
+        $sectionCondition = $field['_section_visible_when'] ?? null;
+
+        if (is_array($sectionCondition) && !$this->conditionMatches($sectionCondition, $fields)) {
+            return false;
+        }
+
         $condition = $field['visible_when'] ?? null;
 
         return !is_array($condition) || $this->conditionMatches($condition, $fields);
@@ -397,6 +407,14 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
             $errors[] = $label . 'ben hibás dátum szerepel.';
         }
 
+        if (!empty($field['not_future'])
+            && !$this->isEmptyValue($value)
+            && $this->isValidDate((string) $value)
+            && $this->isFutureDate((string) $value)
+        ) {
+            $errors[] = $label . ' nem lehet jövőbeli dátum.';
+        }
+
         if (($field['type'] ?? '') === 'number' && !$this->isEmptyValue($value) && !is_numeric((string) $value)) {
             $errors[] = $label . 'ben csak szám szerepelhet.';
         }
@@ -423,6 +441,11 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
         [$year, $month, $day] = array_map('intval', explode('-', $value));
 
         return checkdate($month, $day, $year);
+    }
+
+    private function isFutureDate(string $value): bool
+    {
+        return $value > date('Y-m-d');
     }
 
     /**
@@ -483,7 +506,8 @@ class StructuredStatementDeclarationHandler implements DeclarationFormHandlerInt
                 }
 
                 if ($parts !== []) {
-                    $rows[$repeaterTitle . ' - ' . ((int) $index + 1) . '. sor'] = implode(', ', $parts);
+                    $rows[$repeaterTitle . ' - ' . ((int) $index + 1) . '. '
+                        . (string) ($repeater['row_label'] ?? 'adatlap')] = implode(', ', $parts);
                 }
             }
         }

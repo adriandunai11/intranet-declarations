@@ -2,6 +2,8 @@
 
 namespace App\Modules\Declarations\Services\Validation;
 
+use DateTimeImmutable;
+
 class HungarianIdentifierValidator
 {
     private const HUNGARIAN_BANK_PREFIXES = [
@@ -30,7 +32,26 @@ class HungarianIdentifierValidator
             $sum += ((int) $value[$i]) * ($i + 1);
         }
 
-        return $sum % 11 === (int) $value[9];
+        return $sum % 11 === (int) $value[9]
+            && $this->birthDateFromTaxNumber($value) !== null;
+    }
+
+    public function birthDateFromTaxNumber(string $value): ?string
+    {
+        $value = preg_replace('/\D+/', '', $value) ?? '';
+
+        if (!preg_match('/^8\d{9}$/', $value)) {
+            return null;
+        }
+
+        $daysSinceEpoch = (int) substr($value, 1, 5);
+        $birthDate = (new DateTimeImmutable('1867-01-01'))->modify('+' . $daysSinceEpoch . ' days');
+
+        if ($birthDate > new DateTimeImmutable('today')) {
+            return null;
+        }
+
+        return $birthDate->format('Y-m-d');
     }
 
     public function isValidCompanyTaxNumber(string $value): bool

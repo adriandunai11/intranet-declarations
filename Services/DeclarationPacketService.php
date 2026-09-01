@@ -2,19 +2,18 @@
 
 namespace App\Modules\Declarations\Services;
 
+use App\Modules\Declarations\Entities\DeclarationInvitation;
 use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
 use App\Modules\Declarations\Entities\DeclarationTemplate;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\DeclarationTemplateModel;
-use App\Modules\Declarations\Models\EmploymentRelationModel;
 use App\Modules\Declarations\Models\PersonModel;
 use App\Models\BasicdataModel;
 use App\Modules\Declarations\Models\DeclarationInvitationModel;
 use App\Modules\Declarations\Services\InvitationTokenService;
 use App\Modules\Declarations\Services\RecruiterService;
-use App\Modules\Declarations\Entities\EmploymentRelation;
 use App\Modules\Declarations\Models\DeclarationSubmissionModel;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Presenters\Submissions\SubmissionPresenterRegistry;
@@ -26,12 +25,11 @@ use RuntimeException;
 
 class DeclarationPacketService
 {
-    private const PERSONAL_DATA_TEMPLATE_CODE = 'personal_data_statement';
+    private const PERSONAL_DATA_TEMPLATE_CODE = DeclarationTemplate::CODE_PERSONAL_DATA;
 
     protected DeclarationPacketModel $packetModel;
     protected DeclarationPacketItemModel $itemModel;
     protected DeclarationTemplateModel $templateModel;
-    protected EmploymentRelationModel $relationModel;
     protected PersonModel $personModel;
     protected BasicdataModel $basicdataModel;
     protected DeclarationInvitationModel $invitationModel;
@@ -48,7 +46,6 @@ class DeclarationPacketService
         $this->packetModel = new DeclarationPacketModel();
         $this->itemModel = new DeclarationPacketItemModel();
         $this->templateModel = new DeclarationTemplateModel();
-        $this->relationModel = new EmploymentRelationModel();
         $this->personModel = new PersonModel();
         $this->basicdataModel = new BasicdataModel();
         $this->invitationModel = new DeclarationInvitationModel();
@@ -63,10 +60,14 @@ class DeclarationPacketService
 
     public function getAvailableTemplates(?int $taxYear = null): array
     {
-        return array_values(array_filter(
+        $templates = array_values(array_filter(
             $this->templateModel->findActiveForYear($taxYear),
             fn($template): bool => $this->formRegistry->hasConcreteHandlerForTemplate($template)
         ));
+
+        $this->sortTemplates($templates);
+
+        return $templates;
     }
 
     public function findPacketsByPersonId(int $personId): array
@@ -74,25 +75,77 @@ class DeclarationPacketService
         return $this->packetModel->findByPersonId($personId);
     }
 
-    public function createDefaultOnboardingForRelation(int $relationId, ?int $taxYear = null): int
+    public function createForPersonProcess(int $personId, array $data): int
     {
-        $templates = $this->templateModel->findDefaultOnboardingTemplates($taxYear);
-        $templates = array_values(array_filter($templates, function ($template): bool {
-            return $this->formRegistry->hasConcreteHandlerForTemplate($template);
-        }));
+        $person = $this->personModel->find($personId);
 
-        if (empty($templates)) {
-            throw new RuntimeException('Nincs aktív online kitölthető alap beléptetési nyilatkozat.');
+        if (!$person) {
+            throw new RuntimeException('A személy nem található.');
         }
 
-        $templateIds = array_map(static fn($template): int => (int) $template->id, $templates);
+        $processType = (string) ($data['process_type'] ?? '');
 
-        return $this->createForRelation(
-            $relationId,
+        if (!in_array($processType, ['onboarding', 'other'], true)) {
+            throw new RuntimeException('Válaszd ki, hogy belépési vagy egyéb nyilatkozatcsomagot indítasz.');
+        }
+
+        $companyId = (int) ($data['company_id'] ?? 0);
+
+        if ($companyId <= 0) {
+            throw new RuntimeException('A cég megadása kötelező.');
+        }
+
+        $company = $this->basicdataModel
+            ->where('type', 'division')
+            ->where('status', 1)
+            ->where('id', $companyId)
+            ->first();
+
+        if (!$company) {
+            throw new RuntimeException('A kiválasztott cég nem található vagy nem aktív.');
+        }
+
+        $dateField = $processType === 'onboarding' ? 'start_date' : 'request_date';
+        $processDate = $this->normalizeProcessDate($data[$dateField] ?? null);
+        $primaryRecruiterUserId = (int) ($data['primary_recruiter_user_id'] ?? 0);
+
+        if ($primaryRecruiterUserId <= 0) {
+            $loggedUserId = $this->currentUserId();
+
+            if ($loggedUserId !== null && $this->recruiterService->isRecruiter($loggedUserId)) {
+                $primaryRecruiterUserId = $loggedUserId;
+            }
+        }
+
+        if ($primaryRecruiterUserId <= 0) {
+            throw new RuntimeException('Az elsődleges toborzó megadása kötelező.');
+        }
+
+        $templateIds = array_values(array_unique(array_filter(array_map(
+            'intval',
+            is_array($data['template_ids'] ?? null) ? $data['template_ids'] : []
+        ))));
+
+        if (empty($templateIds)) {
+            throw new RuntimeException('Legalább egy nyilatkozatot ki kell választani.');
+        }
+
+        $taxYear = array_key_exists('tax_year', $data) && $data['tax_year'] !== ''
+            ? (int) $data['tax_year']
+            : null;
+        $flowType = $processType === 'onboarding'
+            ? DeclarationPacket::FLOW_ONBOARDING
+            : DeclarationPacket::FLOW_ADMIN_MANUAL;
+
+        return $this->createForPerson(
+            $personId,
+            $companyId,
+            $primaryRecruiterUserId,
             $templateIds,
             $taxYear,
-            DeclarationPacketItem::SOURCE_REQUIRED_ONBOARDING,
-            DeclarationPacket::FLOW_ONBOARDING
+            DeclarationPacketItem::SOURCE_ADMIN_SELECTED,
+            $flowType,
+            $processDate
         );
     }
 
@@ -101,26 +154,39 @@ class DeclarationPacketService
         return $this->templateModel->findCandidateSelectableTaxTemplates($taxYear);
     }
 
-    public function createForRelation(
-        int $relationId,
+    public function createForPerson(
+        int $personId,
+        int $companyId,
+        ?int $primaryRecruiterUserId,
         array $templateIds,
         ?int $taxYear = null,
         string $selectionSource = DeclarationPacketItem::SOURCE_ADMIN_SELECTED,
-        string $flowType = DeclarationPacket::FLOW_ADMIN_MANUAL
+        string $flowType = DeclarationPacket::FLOW_ADMIN_MANUAL,
+        ?string $processDate = null
     ): int
     {
-        $relation = $this->relationModel->find($relationId);
+        $person = $this->personModel->find($personId);
 
-        if (!$relation) {
-            throw new RuntimeException('A jogviszony nem található.');
+        if (!$person) {
+            throw new RuntimeException('A személy nem található.');
         }
 
-        if (!$relation->isOpen()) {
-            throw new RuntimeException('Lezárt vagy törölt jogviszonyhoz nem indítható nyilatkozatcsomag.');
+        $company = $this->basicdataModel
+            ->where('type', 'division')
+            ->where('status', 1)
+            ->where('id', $companyId)
+            ->first();
+
+        if (!$company) {
+            throw new RuntimeException('A kiválasztott cég nem található vagy nem aktív.');
+        }
+
+        if (!empty($primaryRecruiterUserId)) {
+            $this->recruiterService->ensureRecruiterExists((int) $primaryRecruiterUserId);
         }
 
         $taxYear = $this->normalizeTaxYear($taxYear);
-        $this->assertNoBlockingPacketForRelation($relation);
+        $this->assertNoBlockingPacketForPerson($personId);
 
         $templateIds = array_values(array_unique(array_filter(array_map('intval', $templateIds))));
 
@@ -147,17 +213,20 @@ class DeclarationPacketService
             $templates[] = $template;
         }
 
+        $this->sortTemplates($templates);
+
         $db = db_connect();
         $db->transBegin();
 
         try {
             $packetId = $this->packetModel->insert([
-                'person_id' => $relation->person_id,
-                'employment_relation_id' => $relation->id,
-                'company_id' => $relation->company_id,
+                'person_id' => $personId,
+                'company_id' => $companyId,
+                'primary_recruiter_user_id' => $primaryRecruiterUserId ?: null,
                 'status' => DeclarationPacket::STATUS_DRAFT,
                 'flow_type' => $flowType,
                 'tax_year' => $taxYear,
+                'process_date' => $processDate,
                 'created_by_user_id' => function_exists('logged') ? logged('id') : null,
             ], true);
 
@@ -192,8 +261,7 @@ class DeclarationPacketService
                     DeclarationPacketItem::STATUS_PENDING,
                     'Nyilatkozatcsomag elem létrehozva.',
                     [
-                        'person_id' => (int) $relation->person_id,
-                        'employment_relation_id' => (int) $relation->id,
+                        'person_id' => $personId,
                         'template_id' => (int) $template->id,
                         'template_code' => $template->code ?? null,
                         'template_name' => $template->name ?? null,
@@ -214,10 +282,11 @@ class DeclarationPacketService
                 DeclarationPacket::STATUS_DRAFT,
                 null,
                 [
-                    'employment_relation_id' => (int) $relation->id,
-                    'person_id' => (int) $relation->person_id,
-                    'company_id' => (int) $relation->company_id,
+                    'person_id' => $personId,
+                    'company_id' => $companyId,
+                    'primary_recruiter_user_id' => $primaryRecruiterUserId ?: null,
                     'tax_year' => $taxYear,
+                    'process_date' => $processDate,
                     'flow_type' => $flowType,
                     'template_ids' => $templateIds,
                 ]
@@ -252,15 +321,14 @@ class DeclarationPacketService
         $packet = $this->findPacket($packetId);
 
         $person = $this->personModel->find($packet->person_id);
-        $relation = $this->relationModel->find($packet->employment_relation_id);
         $items = $this->itemModel->findWithTemplatesByPacketId($packet->id);
 
         $company = null;
         $recruiter = null;
         $recruiterDisplayName = null;
 
-        if ($relation && !empty($relation->primary_recruiter_user_id)) {
-            $recruiter = $this->recruiterService->findRecruiterById((int) $relation->primary_recruiter_user_id);
+        if (!empty($packet->primary_recruiter_user_id)) {
+            $recruiter = $this->recruiterService->findRecruiterById((int) $packet->primary_recruiter_user_id);
 
             if ($recruiter) {
                 $antraid = $this->recruiterService->getAntraId($recruiter);
@@ -281,7 +349,7 @@ class DeclarationPacketService
         return [
             'packet' => $packet,
             'person' => $person,
-            'relation' => $relation,
+            'relation' => null,
             'company' => $company,
             'recruiter' => $recruiter,
             'recruiterDisplayName' => $recruiterDisplayName,
@@ -296,20 +364,19 @@ class DeclarationPacketService
         $packet = $this->findPacket($packetId);
 
         $person = $this->personModel->find($packet->person_id);
-        $relation = $this->relationModel->find($packet->employment_relation_id);
 
         if (!$person) {
             throw new RuntimeException('A személy nem található.');
         }
 
-        if (!$relation) {
-            throw new RuntimeException('A csomaghoz kapcsolódó jogviszony nem található.');
+        if (in_array((string) $packet->status, [
+            DeclarationPacket::STATUS_CLOSED,
+            DeclarationPacket::STATUS_CANCELLED,
+        ], true)) {
+            throw new RuntimeException('Lezárt vagy törölt nyilatkozatcsomaghoz nem küldhető új meghívó link.');
         }
 
-        $this->assertNoBlockingPacketForRelation(
-            $relation,
-            (int) $packet->id
-        );
+        $this->assertNoBlockingPacketForPerson((int) $packet->person_id, (int) $packet->id);
 
         if ($this->packetRequiresPersonalDataTemplate((string) ($packet->flow_type ?? ''))) {
             $this->assertPacketContainsPersonalDataItem((int) $packet->id);
@@ -325,17 +392,9 @@ class DeclarationPacketService
         $tokenHash = $this->tokenService->hashToken($plainToken);
         $expiresAt = (new DateTime('+14 days'))->format('Y-m-d H:i:s');
 
-        $activeInvitationsBeforeRevoke = $this->invitationModel
-            ->where('packet_id', (int) $packet->id)
-            ->whereIn('status', [
-                \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_CREATED,
-                \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_SENT,
-                \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_OPENED,
-            ])
-            ->countAllResults();
+        $activeInvitationsBeforeRevoke = $this->invitationModel->countActiveByPacketId((int) $packet->id);
 
         $oldPacketStatus = (string) $packet->status;
-        $oldRelationStatus = (string) $relation->status;
 
         $db = db_connect();
         $db->transBegin();
@@ -351,11 +410,10 @@ class DeclarationPacketService
                     (int) $packet->id,
                     null,
                     null,
-                    \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_REVOKED,
+                    DeclarationInvitation::STATUS_REVOKED,
                     'Új meghívó link küldése miatt a korábbi aktív linkek visszavonásra kerültek.',
                     [
                         'person_id' => (int) $packet->person_id,
-                        'employment_relation_id' => (int) $packet->employment_relation_id,
                         'revoked_active_invitations' => $activeInvitationsBeforeRevoke,
                     ]
                 );
@@ -363,11 +421,10 @@ class DeclarationPacketService
 
             $invitationId = $this->invitationModel->insert([
                 'person_id' => $packet->person_id,
-                'employment_relation_id' => $packet->employment_relation_id,
                 'packet_id' => $packet->id,
                 'email' => $candidateEmail,
                 'token_hash' => $tokenHash,
-                'status' => \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_SENT,
+                'status' => DeclarationInvitation::STATUS_SENT,
                 'sent_at' => date('Y-m-d H:i:s'),
                 'expires_at' => $expiresAt,
             ], true);
@@ -387,20 +444,6 @@ class DeclarationPacketService
                 $this->packetModel->markAsSent((int) $packet->id);
             }
 
-            if (in_array($oldRelationStatus, [
-                EmploymentRelation::STATUS_DRAFT,
-                EmploymentRelation::STATUS_ONBOARDING,
-                EmploymentRelation::STATUS_INVITED,
-                EmploymentRelation::STATUS_IN_PROGRESS,
-                EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
-                EmploymentRelation::STATUS_COMPLETED,
-            ], true)) {
-                $this->relationModel->updateStatus(
-                    (int) $packet->employment_relation_id,
-                    EmploymentRelation::STATUS_INVITED
-                );
-            }
-
             $this->auditLogModel->logAction(
                 $activeInvitationsBeforeRevoke > 0
                     ? DeclarationAuditLogModel::ACTION_INVITATION_REGENERATED
@@ -410,11 +453,10 @@ class DeclarationPacketService
                 (int) $packet->id,
                 null,
                 null,
-                \App\Modules\Declarations\Entities\DeclarationInvitation::STATUS_SENT,
+                DeclarationInvitation::STATUS_SENT,
                 $activeInvitationsBeforeRevoke > 0 ? 'Új meghívó link létrehozva.' : 'Meghívó link létrehozva.',
                 [
                     'person_id' => (int) $packet->person_id,
-                    'employment_relation_id' => (int) $packet->employment_relation_id,
                     'invitation_id' => (int) $invitationId,
                     'email' => $candidateEmail,
                     'expires_at' => $expiresAt,
@@ -422,7 +464,6 @@ class DeclarationPacketService
                     'current_packet_status' => in_array($oldPacketStatus, [DeclarationPacket::STATUS_DRAFT, DeclarationPacket::STATUS_SENT], true)
                         ? DeclarationPacket::STATUS_SENT
                         : $oldPacketStatus,
-                    'old_relation_status' => $oldRelationStatus,
                 ]
             );
 
@@ -463,25 +504,61 @@ class DeclarationPacketService
         }
 
         $oldPacketStatus = (string) $packet->status;
+        $activeInvitationsBeforeRevoke = $this->invitationModel->countActiveByPacketId((int) $packet->id);
 
-        if (!$this->packetModel->markAsClosed($packetId)) {
-            throw new RuntimeException('A nyilatkozatcsomag lezárása sikertelen.');
+        $db = db_connect();
+        $db->transBegin();
+
+        try {
+            if (!$this->packetModel->markAsClosed($packetId)) {
+                throw new RuntimeException('A nyilatkozatcsomag lezárása sikertelen.');
+            }
+
+            if ($activeInvitationsBeforeRevoke > 0) {
+                if (!$this->invitationModel->revokeActiveByPacketId((int) $packet->id)) {
+                    throw new RuntimeException('A meghívó link visszavonása sikertelen, ezért a nyilatkozatcsomag nem került lezárásra.');
+                }
+
+                $this->auditLogModel->logAction(
+                    DeclarationAuditLogModel::ACTION_INVITATION_REVOKED,
+                    'declaration_invitation',
+                    null,
+                    $packetId,
+                    null,
+                    null,
+                    DeclarationInvitation::STATUS_REVOKED,
+                    'A nyilatkozatcsomag lezárása miatt az aktív meghívó linkek visszavonásra kerültek.',
+                    [
+                        'person_id' => (int) $packet->person_id,
+                        'revoked_active_invitations' => $activeInvitationsBeforeRevoke,
+                    ]
+                );
+            }
+
+            $this->auditLogModel->logAction(
+                DeclarationAuditLogModel::ACTION_PACKET_CLOSED,
+                'declaration_packet',
+                $packetId,
+                $packetId,
+                null,
+                $oldPacketStatus,
+                DeclarationPacket::STATUS_CLOSED,
+                'A nyilatkozatcsomagot munkaügyi lezárással véglegesítették.',
+                [
+                    'person_id' => (int) $packet->person_id,
+                    'revoked_active_invitations' => $activeInvitationsBeforeRevoke,
+                ]
+            );
+
+            if ($db->transStatus() === false) {
+                throw new RuntimeException('A nyilatkozatcsomag lezárása sikertelen.');
+            }
+
+            $db->transCommit();
+        } catch (\Throwable $e) {
+            $db->transRollback();
+            throw $e;
         }
-
-        $this->auditLogModel->logAction(
-            DeclarationAuditLogModel::ACTION_PACKET_CLOSED,
-            'declaration_packet',
-            $packetId,
-            $packetId,
-            null,
-            $oldPacketStatus,
-            DeclarationPacket::STATUS_CLOSED,
-            'A nyilatkozatcsomagot adminisztratívan lezárták.',
-            [
-                'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
-            ]
-        );
     }
 
     public function findPacketReviewDetails(int $packetId): array
@@ -505,10 +582,13 @@ class DeclarationPacketService
                     (string) ($item->template_code ?? ''),
                     $submission
                 ),
+                'display_tables' => $this->submissionPresenterRegistry->tablesFor(
+                    (string) ($item->template_code ?? ''),
+                    $submission
+                ),
                 'can_review' => (string) $packet->status === DeclarationPacket::STATUS_SUBMITTED
                     && $this->reviewAuthorizationService->canReviewItem(
                         $packet,
-                        $details['relation'] ?? null,
                         $item
                     ),
             ];
@@ -616,7 +696,6 @@ class DeclarationPacketService
             'Nyilatkozat hozzáadva a csomaghoz.',
             [
                 'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'template_id' => (int) $template->id,
                 'template_code' => $template->code ?? null,
                 'template_name' => $template->name ?? null,
@@ -666,7 +745,7 @@ class DeclarationPacketService
         $packet = $this->findPacket($packetId);
 
         if (!$this->canCandidateSelectTaxTemplates($packet)) {
-            throw new RuntimeException('Beléptetési csomaghoz csak az előre kiválasztott adóügyi nyilatkozatok tölthetők ki.');
+            throw new RuntimeException('Ehhez a csomaghoz már nem adható hozzá új nyilatkozat.');
         }
 
         if (in_array((string) $packet->status, [
@@ -724,7 +803,6 @@ class DeclarationPacketService
             'Kitöltő által választható adóügyi nyilatkozat hozzáadva a csomaghoz.',
             [
                 'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'template_id' => (int) $template->id,
                 'template_code' => $template->code ?? null,
                 'template_name' => $template->name ?? null,
@@ -738,7 +816,13 @@ class DeclarationPacketService
 
     private function canCandidateSelectTaxTemplates(object $packet): bool
     {
-        return (string) ($packet->flow_type ?? '') !== DeclarationPacket::FLOW_ONBOARDING;
+        return !in_array((string) $packet->status, [
+            DeclarationPacket::STATUS_APPROVED,
+            DeclarationPacket::STATUS_SUBMITTED,
+            DeclarationPacket::STATUS_CLOSED,
+            DeclarationPacket::STATUS_COMPLETED,
+            DeclarationPacket::STATUS_CANCELLED,
+        ], true);
     }
 
     private function normalizeTaxYear(?int $taxYear): int
@@ -764,6 +848,48 @@ class DeclarationPacketService
         return array_values(array_unique(array_map('intval', $templateIds)));
     }
 
+    private function sortTemplates(array &$templates): void
+    {
+        $originalOrder = [];
+
+        foreach ($templates as $index => $template) {
+            $originalOrder[(int) ($template->id ?? 0)] = $index;
+        }
+
+        usort($templates, function ($left, $right) use ($originalOrder): int {
+            $leftCode = (string) ($left->code ?? '');
+            $rightCode = (string) ($right->code ?? '');
+            $leftPriority = DeclarationTemplate::displayPriorityForCode($leftCode);
+            $rightPriority = DeclarationTemplate::displayPriorityForCode($rightCode);
+
+            if ($leftPriority !== $rightPriority) {
+                return $leftPriority <=> $rightPriority;
+            }
+
+            return ($originalOrder[(int) ($left->id ?? 0)] ?? 0)
+                <=> ($originalOrder[(int) ($right->id ?? 0)] ?? 0);
+        });
+    }
+
+    private function assertCreatableTemplateIds(array $templateIds, string $flowType): void
+    {
+        if ($this->packetRequiresPersonalDataTemplate($flowType)) {
+            $templateIds = $this->withPersonalDataTemplate($templateIds);
+        }
+
+        foreach ($templateIds as $templateId) {
+            $template = $this->templateModel->find((int) $templateId);
+
+            if (!$template || !$template->isActive()) {
+                throw new RuntimeException('A kiválasztott nyilatkozat nem található vagy nem aktív.');
+            }
+
+            if (!$this->formRegistry->hasConcreteHandlerForTemplate($template)) {
+                throw new RuntimeException('A kiválasztott nyilatkozat még nem tölthető ki online: ' . ($template->name ?: $template->code));
+            }
+        }
+    }
+
     private function assertPacketContainsPersonalDataItem(int $packetId): void
     {
         foreach ($this->itemModel->findWithTemplatesByPacketId($packetId) as $item) {
@@ -775,22 +901,41 @@ class DeclarationPacketService
         throw new RuntimeException('A csomagból hiányzik a személyes adatok nyilatkozata, ezért nem küldhető ki.');
     }
 
-    private function assertNoBlockingPacketForRelation(EmploymentRelation $relation, ?int $excludePacketId = null): void
+    private function assertNoBlockingPacketForPerson(int $personId, ?int $excludePacketId = null): void
     {
-        $existingPacket = $this->packetModel->findOpenBlockingByPersonCompanyForOpenRelations(
-            (int) $relation->person_id,
-            (int) $relation->company_id,
-            $excludePacketId
-        );
+        $existingPacket = $this->packetModel->findOpenBlockingByPerson($personId, $excludePacketId);
 
         if (!$existingPacket) {
             return;
         }
 
         throw new RuntimeException(
-            'Ehhez a személyhez ennél a cégnél már van nyitott nyilatkozatcsomag: #'
+            'Ehhez a személyhez már van nyitott nyilatkozatcsomag: #'
             . $existingPacket->id
+            . '. Új csomag akkor indítható, ha a korábbi csomagot lezárták vagy törölték.'
         );
+    }
+
+    private function normalizeProcessDate($value): string
+    {
+        $date = trim((string) ($value ?? ''));
+
+        if ($date === '' || strtotime($date) === false) {
+            throw new RuntimeException('A dátum megadása kötelező.');
+        }
+
+        return date('Y-m-d', strtotime($date));
+    }
+
+    private function currentUserId(): ?int
+    {
+        if (!function_exists('logged')) {
+            return null;
+        }
+
+        $id = logged('id');
+
+        return $id ? (int) $id : null;
     }
 
 }

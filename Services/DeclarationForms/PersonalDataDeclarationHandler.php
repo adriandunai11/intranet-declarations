@@ -58,12 +58,24 @@ class PersonalDataDeclarationHandler implements DeclarationFormHandlerInterface
 
     public function validateNormalized(array $data): void
     {
+        $birthDate = (string) ($data['birth_date'] ?? '');
+
+        if ($birthDate !== '' && $birthDate > date('Y-m-d')) {
+            throw new RuntimeException('A születési dátum nem lehet jövőbeli.');
+        }
+
         if (strlen((string) ($data['tax_number'] ?? '')) !== 10) {
             throw new RuntimeException('Az adóazonosító jelnek pontosan 10 számjegyből kell állnia.');
         }
 
         if (!$this->identifierValidator->isValidTaxNumber((string) ($data['tax_number'] ?? ''))) {
-            throw new RuntimeException('Az adóazonosító jel ellenőrző száma hibás.');
+            throw new RuntimeException('Az adóazonosító jel hibás vagy nem érvényes.');
+        }
+
+        $taxNumberBirthDate = $this->identifierValidator->birthDateFromTaxNumber((string) ($data['tax_number'] ?? ''));
+
+        if ($birthDate !== '' && $taxNumberBirthDate !== null && $taxNumberBirthDate !== $birthDate) {
+            throw new RuntimeException('Az adóazonosító jelben szereplő születési dátum nem egyezik a megadott születési dátummal.');
         }
 
         if (strlen((string) ($data['taj_number'] ?? '')) !== 9) {

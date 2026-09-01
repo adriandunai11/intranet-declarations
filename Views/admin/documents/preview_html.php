@@ -5,6 +5,7 @@
 $summary = is_array($documentSummary ?? null) ? $documentSummary : [];
 $meta = is_array($summary['meta'] ?? null) ? $summary['meta'] : [];
 $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
+$tables = is_array($summary['tables'] ?? null) ? $summary['tables'] : [];
 ?>
 
 <style>
@@ -101,6 +102,46 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
         overflow-wrap: anywhere;
     }
 
+    .declaration-preview-table-wrap {
+        width: 100%;
+        overflow-x: auto;
+        border: 1px solid #dbe7df;
+        border-radius: 8px;
+        background: #fff;
+    }
+
+    .declaration-preview-table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 720px;
+    }
+
+    .declaration-preview-table th,
+    .declaration-preview-table td {
+        border-bottom: 1px solid #e5ece7;
+        border-right: 1px solid #e5ece7;
+        padding: .58rem .65rem;
+        vertical-align: top;
+        color: #111827;
+        font-size: .86rem;
+        line-height: 1.35;
+    }
+
+    .declaration-preview-table th {
+        background: #f1f8ef;
+        color: #315b31;
+        font-weight: 850;
+    }
+
+    .declaration-preview-table tr:last-child td {
+        border-bottom: 0;
+    }
+
+    .declaration-preview-table th:last-child,
+    .declaration-preview-table td:last-child {
+        border-right: 0;
+    }
+
     @media (max-width: 768px) {
         .declaration-preview-hero {
             display: grid;
@@ -180,9 +221,9 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
         <div class="declaration-preview-panel">
             <h3>Kitöltött adatok</h3>
 
-            <?php if (empty($rows)): ?>
+            <?php if (empty($rows) && empty($tables)): ?>
                 <p class="text-muted mb-0">Ehhez a nyilatkozathoz nincs megjeleníthető kitöltött adat.</p>
-            <?php else: ?>
+            <?php elseif (!empty($rows)): ?>
                 <div class="declaration-preview-grid">
                     <?php foreach ($rows as $label => $value): ?>
                         <div class="declaration-preview-field">
@@ -192,6 +233,36 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
+
+            <?php foreach ($tables as $table): ?>
+                <?php
+                $tableColumns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+                $tableRows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+                ?>
+                <?php if (!empty($tableColumns) && !empty($tableRows)): ?>
+                    <h3 class="mt-3"><?= esc($table['title'] ?? 'Táblázat') ?></h3>
+                    <div class="declaration-preview-table-wrap">
+                        <table class="declaration-preview-table">
+                            <thead>
+                                <tr>
+                                    <?php foreach ($tableColumns as $column): ?>
+                                        <th><?= esc($column) ?></th>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($tableRows as $tableRow): ?>
+                                    <tr>
+                                        <?php foreach ($tableColumns as $columnIndex => $column): ?>
+                                            <td><?= esc($tableRow[$columnIndex] ?? '-') ?></td>
+                                        <?php endforeach; ?>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
         </div>
     </div>
 </section>

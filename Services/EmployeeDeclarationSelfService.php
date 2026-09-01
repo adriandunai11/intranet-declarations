@@ -2,18 +2,19 @@
 
 namespace App\Modules\Declarations\Services;
 
+use App\Models\BasicdataModel;
 use App\Modules\Declarations\Entities\DeclarationInvitation;
 use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
 use App\Modules\Declarations\Entities\DeclarationTemplate;
-use App\Modules\Declarations\Entities\EmploymentRelation;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Models\DeclarationInvitationModel;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
+use App\Modules\Declarations\Models\DeclarationSubmissionModel;
 use App\Modules\Declarations\Models\DeclarationTemplateModel;
-use App\Modules\Declarations\Models\EmploymentRelationModel;
 use App\Modules\Declarations\Models\PersonModel;
+use App\Modules\Declarations\Presenters\Submissions\SubmissionPresenterRegistry;
 use App\Modules\Declarations\Services\DeclarationForms\DeclarationFormRegistry;
 use DateTime;
 use RuntimeException;
@@ -23,45 +24,49 @@ class EmployeeDeclarationSelfService
     private const PERSONAL_DATA_TEMPLATE_CODE = 'personal_data_statement';
     private const BANK_ACCOUNT_CHANGE_TEMPLATE_CODE = 'bank_account_change_statement';
     private const CHILD_EXTRA_LEAVE_TEMPLATE_CODE = 'child_extra_leave_statement';
+    private const UNDER_3_CHILD_WORK_SCHEDULE_TEMPLATE_CODE = 'under_3_child_work_schedule_statement';
 
     protected PersonModel $personModel;
-    protected EmploymentRelationModel $relationModel;
     protected DeclarationTemplateModel $templateModel;
     protected DeclarationPacketModel $packetModel;
     protected DeclarationPacketItemModel $itemModel;
+    protected DeclarationSubmissionModel $submissionModel;
     protected DeclarationInvitationModel $invitationModel;
+    protected BasicdataModel $basicdataModel;
     protected InvitationTokenService $tokenService;
     protected DeclarationFormRegistry $formRegistry;
+    protected SubmissionPresenterRegistry $submissionPresenterRegistry;
     protected DeclarationAuditLogModel $auditLogModel;
     protected IntranetUserLinkService $intranetUserLinkService;
 
     public function __construct()
     {
         $this->personModel = new PersonModel();
-        $this->relationModel = new EmploymentRelationModel();
         $this->templateModel = new DeclarationTemplateModel();
         $this->packetModel = new DeclarationPacketModel();
         $this->itemModel = new DeclarationPacketItemModel();
+        $this->submissionModel = new DeclarationSubmissionModel();
         $this->invitationModel = new DeclarationInvitationModel();
+        $this->basicdataModel = new BasicdataModel();
         $this->tokenService = new InvitationTokenService();
         $this->formRegistry = new DeclarationFormRegistry();
+        $this->submissionPresenterRegistry = new SubmissionPresenterRegistry();
         $this->auditLogModel = new DeclarationAuditLogModel();
         $this->intranetUserLinkService = new IntranetUserLinkService();
     }
 
     /**
-     * @return array{person:object,relations:array,templates:array,packets:array,defaultTaxYear:int}
+     * @return array{person:object,companies:array,templates:array,packets:array,defaultTaxYear:int}
      */
     public function dashboardForUser(int $userId): array
     {
         $person = $this->personForUser($userId);
-        $relations = $this->openRelationsForPerson((int) $person->id);
         $defaultTaxYear = $this->defaultTaxYear();
         $packets = $this->packetModel->findByPersonId((int) $person->id);
 
         return [
             'person' => $person,
-            'relations' => $relations,
+            'companies' => $this->activeCompanies(),
             'templates' => $this->availableTemplates($defaultTaxYear),
             'packets' => $packets,
             'defaultTaxYear' => $defaultTaxYear,
@@ -69,16 +74,70 @@ class EmployeeDeclarationSelfService
     }
 
     /**
-     * @return array{packet_id:int,invitation_id:int,url:string,expires_at:string}
+     * @return array<string, mixed>
      */
-    public function startForEmployee(int $userId, int $relationId, int $taxYear, array $templateIds): array
+    public function packetDetailsForUser(int $userId, int $packetId): array
     {
         $person = $this->personForUser($userId);
-        $relation = $this->relationForUser($relationId, (int) $person->id);
+        $packet = $this->packetForPerson($packetId, (int) $person->id);
+        $company = !empty($packet->company_id)
+            ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
+            : null;
+        $items = $this->itemModel->findWithTemplatesByPacketId((int) $packet->id);
+        $submissionsByItemId = $this->submissionModel->findByPacketIdIndexedByItemId((int) $packet->id);
+        $itemDetails = [];
+
+        foreach ($items as $item) {
+            $submission = $submissionsByItemId[(int) $item->id] ?? null;
+
+            $itemDetails[] = [
+                'item' => $item,
+                'submission' => $submission,
+                'display_rows' => $this->submissionPresenterRegistry->rowsFor(
+                    (string) ($item->template_code ?? ''),
+                    $submission
+                ),
+                'display_tables' => $this->submissionPresenterRegistry->tablesFor(
+                    (string) ($item->template_code ?? ''),
+                    $submission
+                ),
+            ];
+        }
+
+        return [
+            'person' => $person,
+            'packet' => $packet,
+            'company' => $company,
+            'items' => $items,
+            'itemDetails' => $itemDetails,
+        ];
+    }
+
+    public function assertCanViewPacketItemForUser(int $userId, int $packetId, int $itemId): void
+    {
+        $person = $this->personForUser($userId);
+        $packet = $this->packetForPerson($packetId, (int) $person->id);
+
+        foreach ($this->itemModel->findByPacketId((int) $packet->id) as $item) {
+            if ((int) $item->id === $itemId) {
+                return;
+            }
+        }
+
+        throw new RuntimeException('A kiválasztott nyilatkozat nem tartozik ehhez a csomaghoz.');
+    }
+
+    /**
+     * @return array{packet_id:int,invitation_id:int,url:string,expires_at:string}
+     */
+    public function startForEmployee(int $userId, int $companyId, int $taxYear, array $templateIds): array
+    {
+        $person = $this->personForUser($userId);
+        $company = $this->companyForSelfService($companyId);
         $taxYear = $this->normalizeTaxYear($taxYear);
 
         $this->assertNoOpenPacketForPerson((int) $person->id);
-        $this->assertInitialPacketCanBeSelfStarted($person, $relation);
+        $this->assertInitialPacketCanBeSelfStarted($person);
 
         $templates = $this->selectedTemplates($taxYear, $templateIds);
         if ($templates === []) {
@@ -98,7 +157,7 @@ class EmployeeDeclarationSelfService
         $plainToken = $this->tokenService->generatePlainToken();
         $tokenHash = $this->tokenService->hashToken($plainToken);
         $expiresAt = (new DateTime('+14 days'))->format('Y-m-d H:i:s');
-        $oldRelationStatus = (string) ($relation->status ?? '');
+        $processDate = date('Y-m-d');
 
         $db = db_connect();
         $db->transBegin();
@@ -106,11 +165,12 @@ class EmployeeDeclarationSelfService
         try {
             $packetId = $this->packetModel->insert([
                 'person_id' => (int) $person->id,
-                'employment_relation_id' => (int) $relation->id,
-                'company_id' => (int) $relation->company_id,
+                'company_id' => (int) $company->id,
+                'primary_recruiter_user_id' => null,
                 'status' => DeclarationPacket::STATUS_SENT,
                 'flow_type' => DeclarationPacket::FLOW_SELF_SERVICE,
                 'tax_year' => $taxYear,
+                'process_date' => $processDate,
                 'created_by_user_id' => $userId,
                 'sent_at' => date('Y-m-d H:i:s'),
             ], true);
@@ -141,7 +201,6 @@ class EmployeeDeclarationSelfService
 
             $invitationId = $this->invitationModel->insert([
                 'person_id' => (int) $person->id,
-                'employment_relation_id' => (int) $relation->id,
                 'packet_id' => (int) $packetId,
                 'email' => $candidateEmail,
                 'token_hash' => $tokenHash,
@@ -153,10 +212,6 @@ class EmployeeDeclarationSelfService
             if (!$invitationId) {
                 $errors = $this->invitationModel->errors();
                 throw new RuntimeException(!empty($errors) ? implode(' ', $errors) : 'A kitöltési link létrehozása sikertelen.');
-            }
-
-            if ($this->canMoveRelationToSent($oldRelationStatus)) {
-                $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_INVITED);
             }
 
             $this->auditLogModel->logAction(
@@ -172,16 +227,13 @@ class EmployeeDeclarationSelfService
                     'actor_type' => 'employee',
                     'actor_user_id' => $userId,
                     'person_id' => (int) $person->id,
-                    'employment_relation_id' => (int) $relation->id,
+                    'company_id' => (int) $company->id,
                     'tax_year' => $taxYear,
+                    'process_date' => $processDate,
                     'flow_type' => DeclarationPacket::FLOW_SELF_SERVICE,
                     'template_ids' => array_map(static fn($template): int => (int) $template->id, $templates),
                     'invitation_id' => (int) $invitationId,
                     'email' => $candidateEmail,
-                    'old_relation_status' => $oldRelationStatus,
-                    'current_relation_status' => $this->canMoveRelationToSent($oldRelationStatus)
-                        ? EmploymentRelation::STATUS_INVITED
-                        : $oldRelationStatus,
                 ]
             );
 
@@ -240,31 +292,40 @@ class EmployeeDeclarationSelfService
     /**
      * @return list<object>
      */
-    private function openRelationsForPerson(int $personId): array
+    private function activeCompanies(): array
     {
-        return $this->relationModel
-            ->where('person_id', $personId)
-            ->whereNotIn('status', [
-                EmploymentRelation::STATUS_CLOSED,
-                EmploymentRelation::STATUS_CANCELLED,
-            ])
-            ->orderBy('start_date', 'DESC')
+        return $this->basicdataModel
+            ->where('type', 'division')
+            ->where('status', 1)
+            ->orderBy('name', 'ASC')
             ->orderBy('id', 'DESC')
             ->findAll();
     }
 
-    private function relationForUser(int $relationId, int $personId): object
+    private function companyForSelfService(int $companyId): object
     {
-        $relation = $this->relationModel->find($relationId);
+        $company = $this->basicdataModel
+            ->where('type', 'division')
+            ->where('status', 1)
+            ->where('id', $companyId)
+            ->first();
 
-        if (!$relation
-            || (int) $relation->person_id !== $personId
-            || !$relation->isOpen()
-        ) {
-            throw new RuntimeException('A kiválasztott jogviszony nem használható saját nyilatkozat indításához.');
+        if (!$company) {
+            throw new RuntimeException('A kiválasztott cég nem található vagy nem aktív.');
         }
 
-        return $relation;
+        return $company;
+    }
+
+    private function packetForPerson(int $packetId, int $personId): object
+    {
+        $packet = $this->packetModel->find($packetId);
+
+        if (!$packet || (int) $packet->person_id !== $personId) {
+            throw new RuntimeException('A nyilatkozatcsomag nem található a saját nyilatkozataid között.');
+        }
+
+        return $packet;
     }
 
     /**
@@ -304,26 +365,19 @@ class EmployeeDeclarationSelfService
             self::BANK_ACCOUNT_CHANGE_TEMPLATE_CODE,
             self::PERSONAL_DATA_TEMPLATE_CODE,
             self::CHILD_EXTRA_LEAVE_TEMPLATE_CODE,
+            self::UNDER_3_CHILD_WORK_SCHEDULE_TEMPLATE_CODE,
         ], true);
     }
 
-    private function assertInitialPacketCanBeSelfStarted(object $person, object $relation): void
+    private function assertInitialPacketCanBeSelfStarted(object $person): void
     {
         if ($this->hasPreviousNonCancelledPacket((int) $person->id)) {
             return;
         }
 
-        if (in_array((string) ($relation->status ?? ''), [
-            EmploymentRelation::STATUS_ACTIVE,
-            EmploymentRelation::STATUS_COMPLETED,
-            EmploymentRelation::STATUS_TRANSFERRED,
-        ], true)) {
-            return;
-        }
-
         throw new RuntimeException(
             'Az első belépési nyilatkozatcsomagot a toborzó vagy munkaügy küldi ki. '
-            . 'Saját indítás akkor használható, ha az első csomag már elindult, vagy aktív dolgozóként éves/adatváltozási nyilatkozatot ad le.'
+            . 'Saját indítás akkor használható, ha korábban már volt nyilatkozatcsomagod.'
         );
     }
 
@@ -333,18 +387,6 @@ class EmployeeDeclarationSelfService
             ->where('person_id', $personId)
             ->where('status !=', DeclarationPacket::STATUS_CANCELLED)
             ->countAllResults() > 0;
-    }
-
-    private function canMoveRelationToSent(string $status): bool
-    {
-        return in_array($status, [
-            EmploymentRelation::STATUS_DRAFT,
-            EmploymentRelation::STATUS_ONBOARDING,
-            EmploymentRelation::STATUS_INVITED,
-            EmploymentRelation::STATUS_IN_PROGRESS,
-            EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
-            EmploymentRelation::STATUS_COMPLETED,
-        ], true);
     }
 
     private function assertNoOpenPacketForPerson(int $personId): void
@@ -377,7 +419,7 @@ class EmployeeDeclarationSelfService
             DeclarationPacket::STATUS_IN_PROGRESS => 'kitöltés alatt',
             DeclarationPacket::STATUS_SUBMITTED => 'ellenőrzésre vár',
             DeclarationPacket::STATUS_APPROVED,
-            DeclarationPacket::STATUS_COMPLETED => 'elfogadva',
+            DeclarationPacket::STATUS_COMPLETED => 'elfogadva, lezárásra vár',
             DeclarationPacket::STATUS_CLOSED => 'lezárva',
             DeclarationPacket::STATUS_CANCELLED => 'törölve',
             default => $status !== '' ? $status : 'ismeretlen',

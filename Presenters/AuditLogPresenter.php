@@ -9,11 +9,6 @@ class AuditLogPresenter
         'person_updated' => 'Személy módosítva',
         'person_sensitive_data_updated_from_candidate' => 'Személyes adatok frissítve',
         'person_data_updated_from_submission' => 'Személyes adatok mentve',
-        'employment_relation_created' => 'Jogviszony létrehozva',
-        'employment_relation_closed' => 'Jogviszony lezárva',
-        'employment_relation_reopened' => 'Jogviszony visszanyitva',
-        'employment_relation_status_changed' => 'Jogviszony státusz módosult',
-        'relation_status_changed' => 'Jogviszony státusz módosult',
         'packet_created' => 'Csomag létrehozva',
         'packet_status_changed' => 'Csomag státusz módosult',
         'packet_submitted' => 'Csomag beküldve',
@@ -47,8 +42,6 @@ class AuditLogPresenter
     private array $entityLabels = [
         'person' => 'Személy',
         'declaration_person' => 'Személy',
-        'employment_relation' => 'Jogviszony',
-        'declaration_employment_relation' => 'Jogviszony',
         'declaration_packet' => 'Csomag',
         'declaration_packet_item' => 'Nyilatkozat',
         'declaration_invitation' => 'Meghívó',
@@ -113,7 +106,7 @@ class AuditLogPresenter
         'tax_number_changed' => 'Adóazonosító változott',
         'taj_number_changed' => 'TAJ változott',
         'phone_changed' => 'Telefonszám változott',
-        'start_date' => 'Kezdés dátuma',
+        'start_date' => 'Folyamat dátuma',
         'end_date' => 'Lezárás dátuma',
         'old_end_date' => 'Korábbi lezárás dátuma',
         'invitation_id' => 'Meghívó ID',
@@ -133,7 +126,6 @@ class AuditLogPresenter
 
     private array $contextLabels = [
         'person_id' => 'Személy',
-        'employment_relation_id' => 'Jogviszony',
         'packet_id' => 'Csomag',
         'packet_item_id' => 'Nyilatkozat',
         'submission_id' => 'Beküldés',
@@ -212,8 +204,22 @@ class AuditLogPresenter
             $details[] = $detail;
         }
 
+        $hiddenPayloadKeys = [
+            'actor_type',
+            'actor_label',
+            'actor_user_id',
+            'person_id',
+            $this->legacyRelationPayloadKey(),
+            'packet_id',
+            'packet_item_id',
+            'submission_id',
+            'invitation_id',
+            'old',
+            'new',
+        ];
+
         foreach ($payload as $key => $value) {
-            if (in_array((string) $key, ['actor_type', 'actor_label', 'actor_user_id', 'person_id', 'employment_relation_id', 'packet_id', 'packet_item_id', 'submission_id', 'invitation_id', 'old', 'new'], true)) {
+            if (in_array((string) $key, $hiddenPayloadKeys, true)) {
                 continue;
             }
 
@@ -228,6 +234,11 @@ class AuditLogPresenter
         }
 
         return $this->deduplicateDetails($details);
+    }
+
+    private function legacyRelationPayloadKey(): string
+    {
+        return implode('_', ['employment', 'relation', 'id']);
     }
 
     private function changedDetails(array $payload): array

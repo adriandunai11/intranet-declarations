@@ -3,6 +3,7 @@
 namespace App\Modules\Declarations\Models;
 
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
+use App\Modules\Declarations\Entities\DeclarationTemplate;
 use CodeIgniter\Model;
 
 class DeclarationPacketItemModel extends Model
@@ -94,12 +95,31 @@ class DeclarationPacketItemModel extends Model
             $select[] = 'declaration_templates.details_json AS template_details_json';
         }
 
-        return $this->select($select)
+        $items = $this->select($select)
             ->join('declaration_templates', 'declaration_templates.id = declaration_packet_items.template_id', 'left')
             ->where('declaration_packet_items.packet_id', $packetId)
             ->orderBy('declaration_packet_items.sort_order', 'ASC')
             ->orderBy('declaration_packet_items.id', 'ASC')
             ->findAll();
+
+        usort($items, static function ($left, $right): int {
+            $leftCode = (string) ($left->template_code ?? '');
+            $rightCode = (string) ($right->template_code ?? '');
+            $leftPriority = DeclarationTemplate::displayPriorityForCode($leftCode);
+            $rightPriority = DeclarationTemplate::displayPriorityForCode($rightCode);
+
+            if ($leftPriority !== $rightPriority) {
+                return $leftPriority <=> $rightPriority;
+            }
+
+            $sortOrderComparison = (int) ($left->sort_order ?? 0) <=> (int) ($right->sort_order ?? 0);
+
+            return $sortOrderComparison !== 0
+                ? $sortOrderComparison
+                : (int) ($left->id ?? 0) <=> (int) ($right->id ?? 0);
+        });
+
+        return $items;
     }
 
     public function findByPacketAndTemplateId(int $packetId, int $templateId)

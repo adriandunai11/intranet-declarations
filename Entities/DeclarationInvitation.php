@@ -21,7 +21,6 @@ class DeclarationInvitation extends Entity
     protected $casts = [
         'id' => 'integer',
         'person_id' => 'integer',
-        'employment_relation_id' => '?integer',
         'packet_id' => '?integer',
     ];
 

@@ -30,7 +30,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
     {
         $schema = $this->schemaService->schemaFor((string) ($item->template_code ?? ''));
 
-        return (string) ($item->template_name ?: ($schema['title'] ?? 'Adóügyi nyilatkozat'));
+        return (string) ($schema['title'] ?? ($item->template_name ?: 'Adóügyi nyilatkozat'));
     }
 
     public function view(): string
@@ -92,6 +92,12 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             }
 
             $repeaterKey = (string) ($repeater['key'] ?? '');
+
+            if (!$this->isRepeaterVisible($repeater, $fields)) {
+                $repeaters[$repeaterKey] = [];
+                continue;
+            }
+
             $rawRows = $rawRepeaters[$repeaterKey] ?? [];
             $rawRows = is_array($rawRows) ? array_values($rawRows) : [];
             $rows = [];
@@ -117,6 +123,20 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                     $row[$columnKey] = $this->normalizeValue($column, $rawRow[$columnKey] ?? null);
                 }
 
+                foreach (($repeater['columns'] ?? []) as $column) {
+                    if (!is_array($column)) {
+                        continue;
+                    }
+
+                    $columnKey = (string) ($column['key'] ?? '');
+
+                    if ($columnKey !== '' && !$this->isRepeaterColumnVisible($column, $row)) {
+                        $row[$columnKey] = $this->emptyValueForField($column);
+                    }
+                }
+
+                $row = $this->applyRepeaterDefaults($repeaterKey, $row);
+
                 if (!$this->isEmptyRow($row)) {
                     $rows[] = $row;
                 }
@@ -130,7 +150,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         return [
             'confirm_truth' => !empty($input['confirm_truth']) ? 1 : 0,
             'template_code' => $this->templateCode(),
-            'template_name' => (string) ($this->item->template_name ?? ($schema['title'] ?? 'Adóügyi nyilatkozat')),
+            'template_name' => (string) ($schema['title'] ?? ($this->item->template_name ?? 'Adóügyi nyilatkozat')),
             'template_version' => (string) ($this->item->template_version ?? ''),
             'tax_fields' => $fields,
             'repeaters' => $repeaters,
@@ -163,8 +183,29 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                 $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben hibás dátum szerepel.';
             }
 
+            if (!empty($field['not_future'])
+                && !$this->isEmptyValue($value)
+                && $this->isValidDate((string) $value)
+                && $this->isFutureDate((string) $value)
+            ) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" nem lehet jövőbeli dátum.';
+            }
+
+            if (($field['type'] ?? '') === 'month' && !$this->isEmptyValue($value) && !$this->isValidMonth((string) $value)) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben hibás hónap szerepel.';
+            }
+
             if (($field['type'] ?? '') === 'number' && !$this->isEmptyValue($value) && !is_numeric((string) $value)) {
                 $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben csak szám szerepelhet.';
+            }
+
+            if (($field['type'] ?? '') === 'number'
+                && !$this->isEmptyValue($value)
+                && is_numeric((string) $value)
+                && (float) $value < (float) ($field['min_value'] ?? 0)
+            ) {
+                $errors[] = 'A(z) "' . (string) ($field['label'] ?? $key) . '" mezőben legalább '
+                    . (string) ($field['min_value'] ?? 0) . ' adható meg.';
             }
 
             if (($field['validation'] ?? '') === 'tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidTaxNumber((string) $value)) {
@@ -191,10 +232,16 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
 
             $repeaterKey = (string) ($repeater['key'] ?? '');
             $rows = is_array($repeaters[$repeaterKey] ?? null) ? $repeaters[$repeaterKey] : [];
-            $min = (int) ($repeater['min'] ?? 0);
+            $min = $this->minimumRowsForRepeater($repeater, $fields);
 
             if (count($rows) < $min) {
-                $errors[] = 'A(z) "' . (string) ($repeater['title'] ?? $repeaterKey) . '" részben legalább ' . $min . ' sort meg kell adni.';
+                $errors[] = 'A(z) "' . (string) ($repeater['title'] ?? $repeaterKey) . '" részben legalább ' . $min . ' adatlapot meg kell adni.';
+            }
+
+            $qualifiedMinimumError = $this->qualifiedMinimumError($repeater, $fields, $rows);
+
+            if ($qualifiedMinimumError !== '') {
+                $errors[] = $qualifiedMinimumError;
             }
 
             foreach ($rows as $index => $row) {
@@ -210,7 +257,11 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                     $columnKey = (string) ($column['key'] ?? '');
                     $value = $row[$columnKey] ?? null;
                     $label = (string) ($column['label'] ?? $columnKey);
-                    $rowLabel = ((int) $index + 1) . '. sor';
+                    $rowLabel = ((int) $index + 1) . '. ' . (string) ($repeater['row_label'] ?? 'adatlap');
+
+                    if (!$this->isRepeaterColumnVisible($column, $row)) {
+                        continue;
+                    }
 
                     if ($this->isRepeaterColumnRequired($column, $row) && $this->isEmptyValue($value, (string) ($column['type'] ?? 'text'))) {
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mező kitöltése kötelező.';
@@ -220,8 +271,29 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben hibás dátum szerepel.';
                     }
 
+                    if (!empty($column['not_future'])
+                        && !$this->isEmptyValue($value)
+                        && $this->isValidDate((string) $value)
+                        && $this->isFutureDate((string) $value)
+                    ) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" nem lehet jövőbeli dátum.';
+                    }
+
+                    if (($column['type'] ?? '') === 'month' && !$this->isEmptyValue($value) && !$this->isValidMonth((string) $value)) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben hibás hónap szerepel.';
+                    }
+
                     if (($column['type'] ?? '') === 'number' && !$this->isEmptyValue($value) && !is_numeric((string) $value)) {
                         $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben csak szám szerepelhet.';
+                    }
+
+                    if (($column['type'] ?? '') === 'number'
+                        && !$this->isEmptyValue($value)
+                        && is_numeric((string) $value)
+                        && (float) $value < (float) ($column['min_value'] ?? 0)
+                    ) {
+                        $errors[] = $rowLabel . ': a(z) "' . $label . '" mezőben legalább '
+                            . (string) ($column['min_value'] ?? 0) . ' adható meg.';
                     }
 
                     if (($column['validation'] ?? '') === 'tax_number' && !$this->isEmptyValue($value) && !$this->identifierValidator->isValidTaxNumber((string) $value)) {
@@ -241,6 +313,16 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                     }
                 }
             }
+        }
+
+        $eligibilityStart = (string) ($fields['eligibility_start'] ?? '');
+        $eligibilityEnd = (string) ($fields['eligibility_end'] ?? '');
+
+        if ($this->isValidDate($eligibilityStart)
+            && $this->isValidDate($eligibilityEnd)
+            && $eligibilityEnd < $eligibilityStart
+        ) {
+            $errors[] = 'Az állapot utolsó napja nem lehet korábbi a kezdőnapnál.';
         }
 
         if ($errors !== []) {
@@ -276,6 +358,10 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
 
             foreach (($section['fields'] ?? []) as $field) {
                 if (is_array($field)) {
+                    if (is_array($section['visible_when'] ?? null)) {
+                        $field['_section_visible_when'] = $section['visible_when'];
+                    }
+
                     $fields[] = $field;
                 }
             }
@@ -296,10 +382,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         }
 
         if ($type === 'number') {
-            $value = str_replace(',', '.', (string) ($value ?? ''));
-            $value = preg_replace('/[^0-9.\-]+/', '', $value) ?? '';
-
-            return trim($value);
+            return preg_replace('/\D+/', '', (string) ($value ?? '')) ?? '';
         }
 
         if (($field['validation'] ?? '') === 'tax_number') {
@@ -352,7 +435,24 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
      */
     private function isFieldVisible(array $field, array $fields): bool
     {
+        $sectionCondition = $field['_section_visible_when'] ?? null;
+
+        if (is_array($sectionCondition) && !$this->conditionMatches($sectionCondition, $fields)) {
+            return false;
+        }
+
         $condition = $field['visible_when'] ?? null;
+
+        return !is_array($condition) || $this->conditionMatches($condition, $fields);
+    }
+
+    /**
+     * @param array<string, mixed> $repeater
+     * @param array<string, mixed> $fields
+     */
+    private function isRepeaterVisible(array $repeater, array $fields): bool
+    {
+        $condition = $repeater['visible_when'] ?? null;
 
         return !is_array($condition) || $this->conditionMatches($condition, $fields);
     }
@@ -382,7 +482,17 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
      */
     private function isRepeaterColumnRequired(array $column, array $row): bool
     {
+        if (!$this->isRepeaterColumnVisible($column, $row)) {
+            return false;
+        }
+
         if (!empty($column['required'])) {
+            return true;
+        }
+
+        $requiredWhen = $column['required_when_row'] ?? null;
+
+        if (is_array($requiredWhen) && $this->conditionMatches($requiredWhen, $row)) {
             return true;
         }
 
@@ -403,6 +513,84 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
             : [];
 
         return !in_array((string) ($row[$fieldKey] ?? ''), $values, true);
+    }
+
+    /**
+     * @param array<string, mixed> $column
+     * @param array<string, mixed> $row
+     */
+    private function isRepeaterColumnVisible(array $column, array $row): bool
+    {
+        $condition = $column['visible_when_row'] ?? null;
+
+        return !is_array($condition) || $this->conditionMatches($condition, $row);
+    }
+
+    /**
+     * @param array<string, mixed> $repeater
+     * @param array<string, mixed> $fields
+     */
+    private function minimumRowsForRepeater(array $repeater, array $fields): int
+    {
+        if (!$this->isRepeaterVisible($repeater, $fields)) {
+            return 0;
+        }
+
+        $minimum = max(0, (int) ($repeater['min'] ?? 0));
+        $rule = $repeater['min_by_field'] ?? null;
+
+        if (!is_array($rule)) {
+            return $minimum;
+        }
+
+        $fieldKey = (string) ($rule['field'] ?? '');
+        $values = is_array($rule['values'] ?? null) ? $rule['values'] : [];
+        $actual = (string) ($fields[$fieldKey] ?? '');
+
+        return max($minimum, (int) ($values[$actual] ?? 0));
+    }
+
+    /**
+     * @param array<string, mixed> $repeater
+     * @param array<string, mixed> $fields
+     * @param list<array<string, mixed>> $rows
+     */
+    private function qualifiedMinimumError(array $repeater, array $fields, array $rows): string
+    {
+        $rule = $repeater['qualified_min_by_field'] ?? null;
+
+        if (!is_array($rule)) {
+            return '';
+        }
+
+        $sourceField = (string) ($rule['field'] ?? '');
+        $rowField = (string) ($rule['row_field'] ?? '');
+        $values = is_array($rule['values'] ?? null) ? $rule['values'] : [];
+        $acceptedValues = is_array($rule['accepted_values'] ?? null)
+            ? array_map('strval', $rule['accepted_values'])
+            : [];
+        $required = (int) ($values[(string) ($fields[$sourceField] ?? '')] ?? 0);
+
+        if ($required <= 0 || $rowField === '' || $acceptedValues === []) {
+            return '';
+        }
+
+        $qualified = 0;
+
+        foreach ($rows as $row) {
+            if (in_array((string) ($row[$rowField] ?? ''), $acceptedValues, true)) {
+                $qualified++;
+            }
+        }
+
+        if ($qualified >= $required) {
+            return '';
+        }
+
+        $message = (string) ($repeater['qualified_min_message']
+            ?? 'A kiválasztott kedvezményhez legalább %d jogosító gyermek adata szükséges.');
+
+        return sprintf($message, $required);
     }
 
     /**
@@ -443,6 +631,42 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
         [$year, $month, $day] = array_map('intval', explode('-', $value));
 
         return checkdate($month, $day, $year);
+    }
+
+    private function isFutureDate(string $value): bool
+    {
+        return $value > date('Y-m-d');
+    }
+
+    private function isValidMonth(string $value): bool
+    {
+        if (!preg_match('/^(\d{4})-(\d{2})$/', $value, $matches)) {
+            return false;
+        }
+
+        $month = (int) $matches[2];
+
+        return $month >= 1 && $month <= 12;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function applyRepeaterDefaults(string $repeaterKey, array $row): array
+    {
+        if ($repeaterKey === 'dependents' && ($row['dependent_type'] ?? '') === 'fetus') {
+            $row['name'] = 'magzat';
+            $row['tax_number'] = '';
+            $row['identification_method'] = '';
+            $row['birth_place'] = '';
+            $row['birth_date'] = '';
+            $row['em_code'] = '1';
+            $row['jj_code'] = 'b';
+            $row['mother_child_type'] = '';
+        }
+
+        return $row;
     }
 
     /**
@@ -496,6 +720,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
 
             $repeaterKey = (string) ($repeater['key'] ?? '');
             $repeaterTitle = (string) ($repeater['title'] ?? $repeaterKey);
+            $rowLabel = (string) ($repeater['row_label'] ?? 'adatlap');
 
             foreach (($repeaters[$repeaterKey] ?? []) as $index => $row) {
                 $parts = [];
@@ -514,7 +739,7 @@ class TaxDeclarationHandler implements DeclarationFormHandlerInterface
                 }
 
                 if ($parts !== []) {
-                    $rows[$repeaterTitle . ' - ' . ((int) $index + 1) . '. sor'] = implode(', ', $parts);
+                    $rows[$repeaterTitle . ' - ' . ((int) $index + 1) . '. ' . $rowLabel] = implode(', ', $parts);
                 }
             }
         }

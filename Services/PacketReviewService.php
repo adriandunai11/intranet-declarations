@@ -6,13 +6,11 @@ use App\Modules\Declarations\Entities\DeclarationInvitation;
 use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Entities\DeclarationPacketItem;
 use App\Modules\Declarations\Entities\DeclarationSubmission;
-use App\Modules\Declarations\Entities\EmploymentRelation;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Models\DeclarationInvitationModel;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\DeclarationSubmissionModel;
-use App\Modules\Declarations\Models\EmploymentRelationModel;
 use RuntimeException;
 
 class PacketReviewService
@@ -20,7 +18,6 @@ class PacketReviewService
     protected DeclarationPacketItemModel $itemModel;
     protected DeclarationSubmissionModel $submissionModel;
     protected DeclarationPacketModel $packetModel;
-    protected EmploymentRelationModel $relationModel;
     protected DeclarationNotificationService $notificationService;
     protected DeclarationInvitationModel $invitationModel;
     protected PacketReviewAuthorizationService $reviewAuthorizationService;
@@ -31,7 +28,6 @@ class PacketReviewService
         $this->itemModel = new DeclarationPacketItemModel();
         $this->submissionModel = new DeclarationSubmissionModel();
         $this->packetModel = new DeclarationPacketModel();
-        $this->relationModel = new EmploymentRelationModel();
         $this->notificationService = new DeclarationNotificationService();
         $this->invitationModel = new DeclarationInvitationModel();
         $this->reviewAuthorizationService = new PacketReviewAuthorizationService();
@@ -48,13 +44,13 @@ class PacketReviewService
         }
 
         $packet = $this->packetModel->find($packetId);
-        $relation = $packet ? $this->relationModel->find((int) $packet->employment_relation_id) : null;
 
         if (!$packet) {
             throw new RuntimeException('A nyilatkozatcsomag nem található.');
         }
 
-        $this->reviewAuthorizationService->assertCanReviewItem($packet, $relation, $item);
+        $this->assertPacketPendingReview($packet);
+        $this->reviewAuthorizationService->assertCanReviewItem($packet, $item);
 
         if ($item->status !== DeclarationPacketItem::STATUS_COMPLETED) {
             throw new RuntimeException('Csak beküldött, ellenőrzésre váró nyilatkozat fogadható el.');
@@ -82,7 +78,6 @@ class PacketReviewService
                 null,
                 [
                     'person_id' => (int) $packet->person_id,
-                    'employment_relation_id' => (int) $packet->employment_relation_id,
                     'submission_id' => (int) $submission->id,
                     'old_submission_status' => $oldSubmissionStatus,
                     'new_submission_status' => DeclarationSubmission::STATUS_ACCEPTED,
@@ -125,9 +120,9 @@ class PacketReviewService
             throw new RuntimeException('A nyilatkozatcsomag nem található.');
         }
 
-        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
+        $this->assertPacketPendingReview($packet);
+
         $oldPacketStatus = (string) $packet->status;
-        $oldRelationStatus = $relation ? (string) $relation->status : null;
         $reviewedBy = function_exists('logged') ? (int) logged('id') : null;
         $prepared = [];
 
@@ -145,7 +140,7 @@ class PacketReviewService
                 throw new RuntimeException('Ehhez a nyilatkozathoz nincs beküldött adat: #' . $itemId);
             }
 
-            $this->reviewAuthorizationService->assertCanReviewItem($packet, $relation, $item);
+            $this->reviewAuthorizationService->assertCanReviewItem($packet, $item);
 
             if ($item->status !== DeclarationPacketItem::STATUS_COMPLETED) {
                 throw new RuntimeException('Csak beküldött, ellenőrzésre váró nyilatkozat utasítható el: ' . ($item->template_name ?: ('#' . $itemId)));
@@ -187,30 +182,8 @@ class PacketReviewService
                     'Nyilatkozat elutasítása miatt a csomag újra kitöltés alatt állapotba került.',
                     [
                         'person_id' => (int) $packet->person_id,
-                        'employment_relation_id' => (int) $packet->employment_relation_id,
                     ]
                 );
-            }
-
-            if ($relation && $this->canMoveRelationToInProgress($relation)) {
-                $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
-
-                if ($oldRelationStatus !== EmploymentRelation::STATUS_IN_PROGRESS) {
-                    $this->auditLogModel->logAction(
-                        DeclarationAuditLogModel::ACTION_RELATION_STATUS_CHANGED,
-                        'declaration_employment_relation',
-                        (int) $relation->id,
-                        $packetId,
-                        null,
-                        $oldRelationStatus,
-                        EmploymentRelation::STATUS_IN_PROGRESS,
-                        'Nyilatkozat elutasítása miatt a kapcsolódó nyilatkozati folyamat újra kitöltés alatt állapotba került.',
-                        [
-                            'person_id' => (int) $packet->person_id,
-                            'employment_relation_id' => (int) $relation->id,
-                        ]
-                    );
-                }
             }
 
             foreach ($prepared as $preparedItem) {
@@ -228,7 +201,6 @@ class PacketReviewService
                     $preparedItem['review_note'],
                     [
                         'person_id' => (int) $packet->person_id,
-                        'employment_relation_id' => (int) $packet->employment_relation_id,
                         'submission_id' => (int) $submission->id,
                         'old_submission_status' => $preparedItem['old_submission_status'],
                         'new_submission_status' => DeclarationSubmission::STATUS_REJECTED,
@@ -288,14 +260,19 @@ class PacketReviewService
         }
 
         $packet = $this->packetModel->find($packetId);
-        $relation = $packet ? $this->relationModel->find((int) $packet->employment_relation_id) : null;
 
         if (!$packet) {
             throw new RuntimeException('A nyilatkozatcsomag nem található.');
         }
 
+        if (in_array((string) $packet->status, [
+            DeclarationPacket::STATUS_CLOSED,
+            DeclarationPacket::STATUS_CANCELLED,
+        ], true)) {
+            throw new RuntimeException('Lezárt vagy törölt nyilatkozatcsomag nyilatkozata nem nyitható újra.');
+        }
+
         $oldPacketStatus = (string) $packet->status;
-        $oldRelationStatus = $relation ? (string) $relation->status : null;
         $reviewedBy = function_exists('logged') ? (int) logged('id') : null;
 
         $db = db_connect();
@@ -319,30 +296,8 @@ class PacketReviewService
                     'Újranyitás miatt a csomag újra kitöltés alatt állapotba került.',
                     [
                         'person_id' => (int) $packet->person_id,
-                        'employment_relation_id' => (int) $packet->employment_relation_id,
                     ]
                 );
-            }
-
-            if ($relation && $this->canMoveRelationToInProgress($relation)) {
-                $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_IN_PROGRESS);
-
-                if ($oldRelationStatus !== EmploymentRelation::STATUS_IN_PROGRESS) {
-                    $this->auditLogModel->logAction(
-                        DeclarationAuditLogModel::ACTION_RELATION_STATUS_CHANGED,
-                        'declaration_employment_relation',
-                        (int) $relation->id,
-                        $packetId,
-                        null,
-                        $oldRelationStatus,
-                        EmploymentRelation::STATUS_IN_PROGRESS,
-                        'Újranyitás miatt a kapcsolódó nyilatkozati folyamat újra kitöltés alatt állapotba került.',
-                        [
-                            'person_id' => (int) $packet->person_id,
-                            'employment_relation_id' => (int) $relation->id,
-                        ]
-                    );
-                }
             }
 
             $this->auditLogModel->logAction(
@@ -356,7 +311,6 @@ class PacketReviewService
                 $reviewNote,
                 [
                     'person_id' => (int) $packet->person_id,
-                    'employment_relation_id' => (int) $packet->employment_relation_id,
                     'submission_id' => (int) $submission->id,
                     'old_submission_status' => $oldSubmissionStatus,
                     'new_submission_status' => DeclarationSubmission::STATUS_REJECTED,
@@ -391,6 +345,13 @@ class PacketReviewService
         throw new RuntimeException('A nyilatkozat nem található ebben a csomagban.');
     }
 
+    private function assertPacketPendingReview(object $packet): void
+    {
+        if ((string) $packet->status !== DeclarationPacket::STATUS_SUBMITTED) {
+            throw new RuntimeException('Csak ellenőrzésre váró nyilatkozatcsomag nyilatkozata ellenőrizhető.');
+        }
+    }
+
     private function closePacketIfEveryItemAccepted(int $packetId): void
     {
         if (!$this->allPacketItemsAccepted($packetId)) {
@@ -417,58 +378,8 @@ class PacketReviewService
             'Minden csomagban lévő nyilatkozat elfogadásra került.',
             [
                 'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
             ]
         );
-
-        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
-
-        if ($relation && $this->canMoveRelationToCompleted($relation)) {
-            $oldRelationStatus = (string) $relation->status;
-            $this->relationModel->updateStatus((int) $relation->id, EmploymentRelation::STATUS_COMPLETED);
-
-            if ($oldRelationStatus !== EmploymentRelation::STATUS_COMPLETED) {
-                $this->auditLogModel->logAction(
-                    DeclarationAuditLogModel::ACTION_RELATION_STATUS_CHANGED,
-                    'declaration_employment_relation',
-                    (int) $relation->id,
-                    $packetId,
-                    null,
-                    $oldRelationStatus,
-                    EmploymentRelation::STATUS_COMPLETED,
-                    'Minden csomagban lévő nyilatkozat elfogadásra került.',
-                    [
-                        'person_id' => (int) $packet->person_id,
-                        'employment_relation_id' => (int) $relation->id,
-                    ]
-                );
-            }
-        }
-
-    }
-
-    private function canMoveRelationToInProgress(EmploymentRelation $relation): bool
-    {
-        return in_array((string) $relation->status, [
-            EmploymentRelation::STATUS_DRAFT,
-            EmploymentRelation::STATUS_ONBOARDING,
-            EmploymentRelation::STATUS_INVITED,
-            EmploymentRelation::STATUS_IN_PROGRESS,
-            EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
-            EmploymentRelation::STATUS_COMPLETED,
-        ], true);
-    }
-
-    private function canMoveRelationToCompleted(EmploymentRelation $relation): bool
-    {
-        return in_array((string) $relation->status, [
-            EmploymentRelation::STATUS_DRAFT,
-            EmploymentRelation::STATUS_ONBOARDING,
-            EmploymentRelation::STATUS_INVITED,
-            EmploymentRelation::STATUS_IN_PROGRESS,
-            EmploymentRelation::STATUS_DECLARATIONS_SUBMITTED,
-            EmploymentRelation::STATUS_COMPLETED,
-        ], true);
     }
 
     private function allPacketItemsAccepted(int $packetId): bool

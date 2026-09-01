@@ -18,7 +18,7 @@
                 </div>
                 <div class="overview-card">
                     <div class="overview-label">2. lépés</div>
-                    <div class="overview-text">Adja meg az Antra azonosítót.</div>
+                    <div class="overview-text">Adja meg az ANTRA azonosítót.</div>
                 </div>
                 <div class="overview-card">
                     <div class="overview-label">3. lépés</div>

@@ -5,9 +5,9 @@
 <div class="access-layout">
     <aside class="access-side">
         <div class="eyebrow">Hozzáférés ellenőrzése</div>
-        <h1>Antra azonosító</h1>
+        <h1>ANTRA azonosító</h1>
         <p>
-            A nyilatkozatok megnyitásához adja meg az e-mailben szereplő Antra azonosítót.
+            A nyilatkozatok megnyitásához adja meg az e-mailben szereplő ANTRA azonosítót.
         </p>
 
         <ul class="access-checklist">
@@ -33,10 +33,10 @@
 
                 <section class="form-section">
                     <div class="form-group">
-                        <label for="antra_id">Antra azonosító</label>
+                        <label for="antra_id">ANTRA azonosító</label>
                         <input type="text" id="antra_id" name="antra_id"
                             value="<?= esc(old('antra_id', '')) ?>"
-                            autocomplete="off" data-validate="required|min:1" data-label="Antra azonosító" required autofocus>
+                            autocomplete="off" data-validate="required|min:1" data-label="ANTRA azonosító" required autofocus>
                     </div>
 
                     <div class="form-actions-row form-actions-row-end">

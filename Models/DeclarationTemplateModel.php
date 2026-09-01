@@ -85,36 +85,6 @@ class DeclarationTemplateModel extends Model
             ->findAll();
     }
 
-    public function findDefaultOnboardingTemplates(?int $taxYear = null): array
-    {
-        $builder = $this->where('is_active', 1)
-            ->whereIn('declaration_group', [
-                DeclarationTemplate::GROUP_EMPLOYMENT,
-                DeclarationTemplate::GROUP_PERSONAL_DATA,
-            ])
-            ->where('required_policy', DeclarationTemplate::REQUIRED_ALWAYS)
-            ->groupStart()
-                ->where('effective_from', null)
-                ->orWhere('effective_from <=', date('Y-m-d'))
-            ->groupEnd()
-            ->groupStart()
-                ->where('effective_to', null)
-                ->orWhere('effective_to >=', date('Y-m-d'))
-            ->groupEnd();
-
-        if ($taxYear !== null) {
-            $builder->groupStart()
-                ->where('tax_year', $taxYear)
-                ->orWhere('tax_year', null)
-                ->groupEnd();
-        }
-
-        return $builder
-            ->orderBy('sort_order', 'ASC')
-            ->orderBy('name', 'ASC')
-            ->findAll();
-    }
-
     public function findCandidateSelectableTaxTemplates(?int $taxYear = null): array
     {
         $builder = $this->where('is_active', 1)

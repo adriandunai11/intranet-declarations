@@ -6,6 +6,7 @@
 $summary = is_array($documentSummary ?? null) ? $documentSummary : [];
 $meta = is_array($summary['meta'] ?? null) ? $summary['meta'] : [];
 $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
+$tables = is_array($summary['tables'] ?? null) ? $summary['tables'] : [];
 ?>
 
 <div class="submitted-layout document-preview-layout">
@@ -56,9 +57,9 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
             <div class="data-review-card mt-public">
                 <div class="data-review-title">Kitöltött adatok</div>
 
-                <?php if (empty($rows)): ?>
+                <?php if (empty($rows) && empty($tables)): ?>
                     <div class="empty-state">Ehhez a nyilatkozathoz nincs megjeleníthető kitöltött adat.</div>
-                <?php else: ?>
+                <?php elseif (!empty($rows)): ?>
                     <dl class="data-review-list">
                         <?php foreach ($rows as $label => $value): ?>
                             <div>
@@ -68,6 +69,36 @@ $rows = is_array($summary['rows'] ?? null) ? $summary['rows'] : [];
                         <?php endforeach; ?>
                     </dl>
                 <?php endif; ?>
+
+                <?php foreach ($tables as $table): ?>
+                    <?php
+                    $tableColumns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+                    $tableRows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+                    ?>
+                    <?php if (!empty($tableColumns) && !empty($tableRows)): ?>
+                        <div class="data-review-title mt-public"><?= esc($table['title'] ?? 'Táblázat') ?></div>
+                        <div class="document-preview-table-wrap">
+                            <table class="document-preview-table">
+                                <thead>
+                                    <tr>
+                                        <?php foreach ($tableColumns as $column): ?>
+                                            <th><?= esc($column) ?></th>
+                                        <?php endforeach; ?>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($tableRows as $tableRow): ?>
+                                        <tr>
+                                            <?php foreach ($tableColumns as $columnIndex => $column): ?>
+                                                <td data-label="<?= esc($column) ?>"><?= esc($tableRow[$columnIndex] ?? '-') ?></td>
+                                            <?php endforeach; ?>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
             </div>
         </section>
     </main>

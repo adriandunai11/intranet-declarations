@@ -4,7 +4,6 @@ namespace App\Modules\Declarations\Services;
 
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
-use App\Modules\Declarations\Models\EmploymentRelationModel;
 use App\Modules\Declarations\Models\PersonModel;
 use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Models\BasicdataModel;
@@ -15,7 +14,6 @@ class DeclarationNotificationService
     protected PersonModel $personModel;
     protected DeclarationPacketModel $packetModel;
     protected DeclarationPacketItemModel $itemModel;
-    protected EmploymentRelationModel $relationModel;
     protected DeclarationAuditLogModel $auditLogModel;
     protected BasicdataModel $basicdataModel;
     protected RecruiterService $recruiterService;
@@ -25,7 +23,6 @@ class DeclarationNotificationService
         $this->personModel = new PersonModel();
         $this->packetModel = new DeclarationPacketModel();
         $this->itemModel = new DeclarationPacketItemModel();
-        $this->relationModel = new EmploymentRelationModel();
         $this->auditLogModel = new DeclarationAuditLogModel();
         $this->basicdataModel = new BasicdataModel();
         $this->recruiterService = new RecruiterService();
@@ -103,7 +100,6 @@ class DeclarationNotificationService
             'Javítási összesítő e-mail kiküldve a kitöltőnek.',
             [
                 'person_id' => (int) $person->id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'email' => $person->email,
                 'rejected_count' => count($rejectedItems),
                 'rejected_items' => array_column($rejectedItems, 'name'),
@@ -132,7 +128,6 @@ class DeclarationNotificationService
             throw new RuntimeException('A személy nem található az értesítéshez.');
         }
 
-        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = null;
 
         if (!empty($packet->company_id)) {
@@ -146,8 +141,8 @@ class DeclarationNotificationService
         $recipients = [];
         $recruiterName = '-';
 
-        if ($relation && !empty($relation->primary_recruiter_user_id)) {
-            $recruiter = $this->recruiterService->findRecruiterById((int) $relation->primary_recruiter_user_id);
+        if (!empty($packet->primary_recruiter_user_id)) {
+            $recruiter = $this->recruiterService->findRecruiterById((int) $packet->primary_recruiter_user_id);
 
             if ($recruiter) {
                 $recruiterName = $this->recruiterService->getDisplayName($recruiter);
@@ -201,7 +196,6 @@ class DeclarationNotificationService
             'Nyilatkozatcsomag ellenőrzési értesítő kiküldve.',
             [
                 'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'recipients' => $recipients,
             ]
         );
@@ -231,10 +225,16 @@ class DeclarationNotificationService
             ? $person->fullName()
             : trim(($person->lastname ?? '') . ' ' . ($person->firstname ?? ''));
 
+        $isOnboarding = (string) ($packet->flow_type ?? '') === 'onboarding';
+        $emailTitle = $isOnboarding
+            ? 'Belépéshez szükséges nyilatkozatok kitöltése'
+            : 'Nyilatkozatok kitöltése';
         $message = view('App\Modules\Declarations\Views\emails\invitation', [
             'personName' => $personName,
             'antraId' => trim((string) ($person->antra_id ?? '')),
             'invitationUrl' => $invitationUrl,
+            'emailTitle' => $emailTitle,
+            'isOnboarding' => $isOnboarding,
         ]);
 
         $config = config(\App\Modules\Declarations\Config\Declarations::class);
@@ -242,7 +242,7 @@ class DeclarationNotificationService
         $email = service('email');
         $email->setFrom($config->mailFromEmail, $config->mailFromName);
         $email->setTo($person->email);
-        $email->setSubject('Belépéshez szükséges nyilatkozatok kitöltése');
+        $email->setSubject($emailTitle);
         $email->setMessage($message);
         $email->setMailType('html');
 
@@ -325,7 +325,6 @@ class DeclarationNotificationService
             'Saját indítású nyilatkozat kitöltési link kiküldve a munkavállalónak.',
             [
                 'person_id' => (int) $person->id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'email' => $person->email,
                 'tax_year' => $packet->tax_year ?? null,
             ]

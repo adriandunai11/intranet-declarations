@@ -16,7 +16,6 @@ class DeclarationInvitationModel extends Model
 
     protected $allowedFields = [
         'person_id',
-        'employment_relation_id',
         'packet_id',
         'email',
         'token_hash',
@@ -78,5 +77,16 @@ class DeclarationInvitationModel extends Model
                 'revoked_at' => date('Y-m-d H:i:s'),
             ])
             ->update();
+    }
+
+    public function countActiveByPacketId(int $packetId): int
+    {
+        return $this->where('packet_id', $packetId)
+            ->whereIn('status', [
+                DeclarationInvitation::STATUS_CREATED,
+                DeclarationInvitation::STATUS_SENT,
+                DeclarationInvitation::STATUS_OPENED,
+            ])
+            ->countAllResults();
     }
 }

@@ -9,8 +9,7 @@ A kitöltés védett public linken történik. A link önmagában nem elég: a k
 ## Alapfogalmak
 
 - **Személy**: a nyilatkozati modulban kezelt munkavállalói adatlap.
-- **Jogviszony / beléptetési folyamat**: az adott céges kapcsolódás, amelyhez nyilatkozatcsomag indítható.
-- **Nyilatkozatcsomag**: egy vagy több nyilatkozat együttese, amelyet egy linken keresztül tölt ki a dolgozó.
+- **Nyilatkozatcsomag**: egy vagy több nyilatkozat együttese, amelyet egy linken keresztül tölt ki a dolgozó. A csomaghoz tartozik a cég, az indítás módja és a folyamat dátuma.
 - **Nyilatkozat**: egy konkrét űrlap, például bankszámlaszám, személyes adatok, gyermek után járó pótszabadság vagy adóügyi nyilatkozat.
 - **Meghívó link**: e-mailben kiküldött kitöltési link. Új link küldésekor a korábbi aktív linkek érvényüket vesztik.
 - **Nyilatkozati év**: az az év, amelyhez a csomag tartozik. Nem adóügyi nyilatkozatnál ez inkább adminisztratív csoportosítás, nem tiltja a későbbi új beküldést.
@@ -30,7 +29,13 @@ A kitöltés védett public linken történik. A link önmagában nem elég: a k
 - Elfogadhatja a nyilatkozatot, vagy javításra visszaküldheti.
 - Későbbi éves vagy adatváltozási nyilatkozatcsomagot is kiküldhet.
 - Elfogadás után lezárja a csomagot, hogy új csomag indítható legyen.
-- Összekapcsolja a nyilatkozati személyt az intranet felhasználóval, ha ez még hiányzik.
+
+### Organizátor
+
+- Létrehozza és kezeli az intranet felhasználót a **Felhasználók** modulban.
+- A felhasználói adatlapon ellenőrzi a nyilatkozati kapcsolatot, és szükség esetén összekapcsolja a felhasználót a megfelelő nyilatkozati személlyel.
+- A kapcsoláshoz nincs szüksége nyilatkozati jogosultságra; a `users_view` és a módosításhoz a `users_edit` jogosultság elegendő.
+- Egyértelmű ANTRA-egyezésnél a rendszer az intranet felhasználó létrehozása vagy módosítása után automatikusan elvégzi a kapcsolást.
 
 ### Munkavállaló
 
@@ -42,14 +47,13 @@ A kitöltés védett public linken történik. A link önmagában nem elég: a k
 ## Első beléptetési folyamat
 
 1. Munkaügy vagy toborzó létrehozza a személyt.
-2. Létrejön a beléptetéshez tartozó jogviszony.
-3. A toborzó elindítja az alap beléptetési csomagot.
-4. Az alap csomag kötelezően tartalmazza a személyes adatok, bankszámlaszám és gyermek után járó pótszabadság nyilatkozatot.
-5. Adóügyi nyilatkozat csak akkor kerül a csomagba, ha azt külön kiválasztják.
-6. A rendszer e-mailt küld a kitöltési linkkel és az ANTRA azonosítóval.
-7. A kitöltő megadja az ANTRA azonosítót, kitölti a nyilatkozatokat, majd az ellenőrző oldalon véglegesen beküldi a csomagot.
-8. A jogosult ellenőr elfogadja vagy javításra visszaküldi a nyilatkozatokat.
-9. Elfogadás után a csomag lezárható.
+2. A toborzó elindítja az alap beléptetési csomagot, megadja a céget és a belépés dátumát.
+3. A személyes adatok, a bankszámlaszám és a 3 év alatti gyermek neveléséről szóló nyilatkozat alapértelmezetten ki van jelölve. A személyes adatok a belépési csomag kötelező része, a másik két kijelölést a toborzó szükség esetén módosíthatja.
+4. Adóügyi nyilatkozat csak akkor kerül a csomagba, ha azt külön kiválasztják.
+5. A **Létrehozás és kiküldés** gomb létrehozza a csomagot, majd azonnal elküldi a kitöltési linket és az ANTRA azonosítót a személy adatlapján szereplő e-mail-címre.
+6. A kitöltő megadja az ANTRA azonosítót, kitölti a nyilatkozatokat, majd az ellenőrző oldalon véglegesen beküldi a csomagot.
+7. A jogosult ellenőr elfogadja vagy javításra visszaküldi a nyilatkozatokat.
+8. Elfogadás után a csomag lezárható.
 
 ## Éves adóügyi nyilatkozatok
 
@@ -69,9 +73,11 @@ A kitöltés védett public linken történik. A link önmagában nem elég: a k
 ## Ellenőrzés és javítás
 
 - A kitöltő először menti az egyes nyilatkozatokat.
+- A kitöltői összesítő külön mutatja a még kitöltendő, a kitöltött és a választható nyilatkozatokat.
 - Ha minden szükséges nyilatkozat mentve van, megjelenik az ellenőrzés és végleges beküldés lehetősége.
 - Végleges beküldés után a csomag ellenőrzésre vár.
-- Ellenőrzéskor a jogosult munkatárs látja a beküldött adatokat és a beküldési bizonyítékot.
+- Ellenőrzéskor a jogosult munkatárs látja a beküldött adatokat, lenyithatja a beküldési bizonyítékot, és letöltheti a nyilatkozat PDF-változatát.
+- A munkavállalói kitöltő felületen nincs PDF-előnézet; a végleges ellenőrzés a mentett adatok áttekintésével történik.
 - Ha egy nyilatkozat hibás, csak az érintett nyilatkozatot kell javításra visszaküldeni.
 - Javítás után a kitöltő újra menti az érintett nyilatkozatot, majd a csomagot újra beküldi.
 
@@ -91,7 +97,7 @@ Az alábbi nyomtatványok nem részei az aktív online folyamatnak:
 
 - Nyilatkozat kieső időről
 - TB kiskönyv nyilatkozat
-- Jogviszony nyilatkozat
+- Korábbi munkaviszony-nyilatkozat
 - Nyilatkozat letiltásról
 
 ## Fontos validációs szabályok
@@ -106,7 +112,7 @@ Az alábbi nyomtatványok nem részei az aktív online folyamatnak:
 ## Gyakori hibák és teendők
 
 - **A dolgozó nem tud saját nyilatkozatot indítani**: ellenőrizni kell, hogy van-e kapcsolt intranet felhasználója.
-- **Van intranet felhasználó, de nincs nyilatkozati személy rekord**: munkaügynek össze kell kapcsolnia vagy létre kell hoznia a nyilatkozati személyt.
+- **Van intranet felhasználó, de nincs nyilatkozati kapcsolata**: az organizátor a felhasználói adatlapon ellenőrzi az ANTRA-azonosítót, majd kiválasztja a megfelelő nyilatkozati személyt. Ha nincs találat, előbb a toborzói nyilatkoztatási folyamatban kell létrejönnie a személynek.
 - **A dolgozó új csomagot indítana, de nem engedi a rendszer**: nyitott csomag van. A meglévőt kell befejezni vagy lezárni.
 - **A kitöltő nem jut be a linken**: az e-mailben szereplő ANTRA azonosítót kell pontosan megadni.
 - **A bankszámlás vagy más kötelező nyilatkozat mellett megjelenik a Nem kérem gomb**: ellenőrizni kell az adott csomagelem `selection_source` értékét. Kötelező vagy munkaügy által választott elemnél ez nem lehet kitöltő által választott elem.
@@ -116,6 +122,6 @@ Az alábbi nyomtatványok nem részei az aktív online folyamatnak:
 
 Az oktatást érdemes három részre bontani:
 
-1. **Toborzói folyamat**: személy, jogviszony, alap beléptetési csomag, kiküldés.
+1. **Toborzói folyamat**: személy, alap beléptetési csomag, cég és belépési dátum megadása, létrehozás és automatikus kiküldés.
 2. **Munkaügyi ellenőrzés**: beérkezett csomagok, adatok ellenőrzése, elfogadás, javításra küldés, lezárás.
 3. **Munkavállalói használat**: ANTRA azonosítás, nyilatkozatok kitöltése, ellenőrzés, végleges beküldés, saját indítás a Nyilatkozataim menüpontból.

@@ -21,97 +21,36 @@ class IntranetUserLinkService
         $this->db = db_connect();
     }
 
-    public function candidatesForPerson(int $personId): array
+    /**
+     * @return array{user:array<string,mixed>,user_active:bool,linked_person:?object,candidates:list<array<string,mixed>>}
+     */
+    public function connectionForUser(int $userId): array
     {
-        $person = $this->findPerson($personId);
-        $candidates = [];
+        $user = $this->findUserById($userId);
+        $linkedPerson = $this->personModel
+            ->where('intranet_user_id', $userId)
+            ->first();
+        $userActive = !$this->userFieldExists('status') || (int) ($user->status ?? 0) === 1;
+        $candidates = $linkedPerson ? [] : $this->personCandidatesForUser($user);
 
-        foreach ($this->existingUserFields(['antraid', 'antra_id']) as $field) {
-            $antraId = trim((string) ($person->antra_id ?? ''));
-
-            if ($antraId === '') {
-                continue;
+        if (!$userActive) {
+            foreach ($candidates as &$candidate) {
+                $candidate['can_link'] = false;
             }
-
-            foreach ($this->findActiveUsersByField($field, $antraId) as $user) {
-                $this->addCandidate($candidates, $user, 'Antra azonosító egyezés');
-            }
+            unset($candidate);
         }
 
-        foreach ($this->existingUserFields(['email', 'mail']) as $field) {
-            $email = trim((string) ($person->email ?? ''));
-
-            if ($email === '') {
-                continue;
-            }
-
-            foreach ($this->findActiveUsersByField($field, $email) as $user) {
-                $this->addCandidate($candidates, $user, 'E-mail cím egyezés');
-            }
-        }
-
-        usort($candidates, static fn(array $a, array $b): int => strcmp($a['label'], $b['label']));
-
-        return array_values($candidates);
-    }
-
-    public function linkedUserForPerson(int $personId): ?array
-    {
-        $person = $this->findPerson($personId);
-        $userId = (int) ($person->intranet_user_id ?? 0);
-
-        if ($userId <= 0) {
-            return null;
-        }
-
-        $user = $this->findActiveUserById($userId, false);
-
-        return $user ? $this->userPayload($user, 'Kapcsolt intranet felhasználó') : [
-            'id' => $userId,
-            'label' => 'Felhasználó #' . $userId,
-            'email' => '',
-            'antra_id' => '',
-            'status' => null,
-            'reason' => 'Kapcsolt intranet felhasználó nem található aktívként',
+        return [
+            'user' => $this->userPayload($user, 'Kiválasztott intranet felhasználó'),
+            'user_active' => $userActive,
+            'linked_person' => $linkedPerson,
+            'candidates' => $candidates,
         ];
     }
 
-    public function flashUserAddPrefillForPerson(int $personId): void
+    public function linkPersonForUser(int $userId, int $personId): array
     {
-        $prefill = $this->userAddPrefillForPerson($personId);
-
-        session()->setFlashdata('_ci_old_input', [
-            'get' => [],
-            'post' => $prefill,
-        ]);
-
-        session()->setFlashdata('declarations_user_add_prefill', $prefill);
-    }
-
-    public function userAddPrefillForPerson(int $personId): array
-    {
-        $person = $this->findPerson($personId);
-        $lastname = trim((string) ($person->lastname ?? ''));
-        $firstname = trim((string) ($person->firstname ?? ''));
-        $phone = trim((string) ($person->phone ?? ''));
-        $antraId = trim((string) ($person->antra_id ?? ''));
-        $fullName = trim($lastname . ' ' . $firstname);
-
-        $prefill = [
-            'declaration_person_id' => (int) $person->id,
-            'lastname' => $lastname,
-            'last_name' => $lastname,
-            'firstname' => $firstname,
-            'first_name' => $firstname,
-            'name' => $fullName,
-            'phone' => $phone,
-            'mobile' => $phone,
-            'antraid' => $antraId,
-            'antra_id' => $antraId,
-            'return_url' => url('declarations/persons/' . (int) $person->id),
-        ];
-
-        return array_filter($prefill, static fn($value): bool => $value !== null && $value !== '');
+        return $this->linkExistingUser($personId, $userId);
     }
 
     public function linkExistingUser(int $personId, int $userId): array
@@ -122,6 +61,13 @@ class IntranetUserLinkService
         $this->assertUserNotLinkedToOtherPerson($personId, $userId);
 
         $oldUserId = (int) ($person->intranet_user_id ?? 0);
+
+        if ($oldUserId === $userId) {
+            return [
+                'user_id' => $userId,
+                'user' => $this->userPayload($user, 'Kapcsolt intranet felhasználó'),
+            ];
+        }
 
         $this->db->transBegin();
 
@@ -161,6 +107,14 @@ class IntranetUserLinkService
 
         if (!$user) {
             return null;
+        }
+
+        $linkedPerson = $this->personModel
+            ->where('intranet_user_id', $userId)
+            ->first();
+
+        if ($linkedPerson) {
+            return $linkedPerson;
         }
 
         $matches = [];
@@ -302,6 +256,85 @@ class IntranetUserLinkService
         return $person;
     }
 
+    private function findUserById(int $userId): object
+    {
+        if ($userId <= 0 || !$this->db->tableExists(self::USERS_TABLE)) {
+            throw new RuntimeException('Az intranet felhasználó nem található.');
+        }
+
+        $user = $this->db->table(self::USERS_TABLE)
+            ->where('id', $userId)
+            ->get()
+            ->getRow();
+
+        if (!$user) {
+            throw new RuntimeException('Az intranet felhasználó nem található.');
+        }
+
+        return $user;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private function personCandidatesForUser(object $user): array
+    {
+        $candidates = [];
+        $antraId = $this->userValue($user, ['antraid', 'antra_id']);
+
+        if ($antraId !== '') {
+            foreach ($this->personModel->where('antra_id', $antraId)->findAll() as $person) {
+                $this->addPersonCandidate($candidates, $person, 'ANTRA-azonosító egyezés', 1);
+            }
+        }
+
+        $email = $this->userValue($user, ['email', 'mail']);
+
+        if ($email !== '') {
+            foreach ($this->personModel->where('email', $email)->findAll() as $person) {
+                $this->addPersonCandidate($candidates, $person, 'E-mail-cím egyezés', 2);
+            }
+        }
+
+        uasort($candidates, static function (array $a, array $b): int {
+            $priorityComparison = ((int) $a['priority']) <=> ((int) $b['priority']);
+
+            return $priorityComparison !== 0
+                ? $priorityComparison
+                : strcmp((string) $a['name'], (string) $b['name']);
+        });
+
+        return array_values($candidates);
+    }
+
+    private function addPersonCandidate(array &$candidates, object $person, string $reason, int $priority): void
+    {
+        $personId = (int) ($person->id ?? 0);
+
+        if ($personId <= 0) {
+            return;
+        }
+
+        if (isset($candidates[$personId])) {
+            $candidates[$personId]['reason'] .= ', ' . $reason;
+            $candidates[$personId]['priority'] = min((int) $candidates[$personId]['priority'], $priority);
+            return;
+        }
+
+        $linkedUserId = (int) ($person->intranet_user_id ?? 0);
+
+        $candidates[$personId] = [
+            'id' => $personId,
+            'name' => $person->fullName(),
+            'antra_id' => trim((string) ($person->antra_id ?? '')),
+            'email' => trim((string) ($person->email ?? '')),
+            'reason' => $reason,
+            'priority' => $priority,
+            'linked_user_id' => $linkedUserId > 0 ? $linkedUserId : null,
+            'can_link' => $linkedUserId === 0,
+        ];
+    }
+
     /**
      * @return list<object>
      */
@@ -441,38 +474,6 @@ class IntranetUserLinkService
         return $user;
     }
 
-    private function findActiveUsersByField(string $field, string $value): array
-    {
-        if (!$this->db->tableExists(self::USERS_TABLE) || !$this->userFieldExists($field)) {
-            return [];
-        }
-
-        $builder = $this->db->table(self::USERS_TABLE)
-            ->where($field, $value);
-
-        if ($this->userFieldExists('status')) {
-            $builder->where('status', 1);
-        }
-
-        return $builder->get()->getResult();
-    }
-
-    private function addCandidate(array &$candidates, object $user, string $reason): void
-    {
-        $id = (int) ($user->id ?? 0);
-
-        if ($id <= 0) {
-            return;
-        }
-
-        if (isset($candidates[$id])) {
-            $candidates[$id]['reason'] .= ', ' . $reason;
-            return;
-        }
-
-        $candidates[$id] = $this->userPayload($user, $reason);
-    }
-
     private function userPayload(object $user, string $reason): array
     {
         $id = (int) ($user->id ?? 0);
@@ -513,11 +514,6 @@ class IntranetUserLinkService
         }
 
         return '';
-    }
-
-    private function existingUserFields(array $fields): array
-    {
-        return array_values(array_filter($fields, fn(string $field): bool => $this->userFieldExists($field)));
     }
 
     private function userFieldExists(string $field): bool

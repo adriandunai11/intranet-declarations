@@ -7,7 +7,6 @@ use App\Modules\Declarations\Models\DeclarationAuditLogModel;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\DeclarationSubmissionModel;
-use App\Modules\Declarations\Models\EmploymentRelationModel;
 use App\Modules\Declarations\Models\PersonModel;
 use RuntimeException;
 
@@ -17,7 +16,6 @@ class DeclarationDocumentGenerationService
     protected DeclarationPacketItemModel $itemModel;
     protected DeclarationSubmissionModel $submissionModel;
     protected PersonModel $personModel;
-    protected EmploymentRelationModel $relationModel;
     protected BasicdataModel $basicdataModel;
     protected DeclarationAuditLogModel $auditLogModel;
     protected DeclarationDocumentPlaceholderService $placeholderService;
@@ -29,7 +27,6 @@ class DeclarationDocumentGenerationService
         $this->itemModel = new DeclarationPacketItemModel();
         $this->submissionModel = new DeclarationSubmissionModel();
         $this->personModel = new PersonModel();
-        $this->relationModel = new EmploymentRelationModel();
         $this->basicdataModel = new BasicdataModel();
         $this->auditLogModel = new DeclarationAuditLogModel();
         $this->placeholderService = new DeclarationDocumentPlaceholderService();
@@ -64,12 +61,11 @@ class DeclarationDocumentGenerationService
         }
 
         $person = $this->personModel->find((int) $packet->person_id);
-        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = !empty($packet->company_id)
             ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
             : null;
 
-        $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company);
+        $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $company);
         $outputPath = $this->outputPath((int) $packet->id, (int) $item->id, $templateCode, $format);
 
         $this->submissionPdfGenerator->generate($documentSummary, $outputPath);
@@ -85,7 +81,6 @@ class DeclarationDocumentGenerationService
             strtoupper($format) . ' dokumentum generálva.',
             [
                 'person_id' => (int) $packet->person_id,
-                'employment_relation_id' => (int) $packet->employment_relation_id,
                 'submission_id' => (int) $submission->id,
                 'template_code' => $templateCode,
                 'template_version' => $item->template_version ?? null,

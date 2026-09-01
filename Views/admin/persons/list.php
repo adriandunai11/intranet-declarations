@@ -34,6 +34,10 @@
                     </div>
                 </div>
                 <div class="card-body">
+                    <div class="alert alert-info">
+                        Új nyilatkozatcsomag indításához hozz létre új személyt, vagy nyisd meg a meglévő személy adatlapját a listából.
+                    </div>
+
                     <table id="dataTable1" class="table table-bordered table-striped">
                         <thead>
                             <tr>
@@ -41,8 +45,6 @@
                                 <th>Antra</th>
                                 <th>Név</th>
                                 <th>E-mail</th>
-                                <th>Adóazonosító</th>
-                                <th>TAJ</th>
                                 <th>Állapot</th>
                                 <th>Intranet</th>
                                 <th width="180"><?= lang('App.action') ?></th>
@@ -354,8 +356,6 @@
                 { data: 'antra_id' },
                 { data: 'name', searchable: false },
                 { data: 'email' },
-                { data: 'tax_number' },
-                { data: 'taj_number' },
                 { data: 'status' },
                 { data: 'intranet_link', orderable: false, searchable: false },
                 { data: 'actions', orderable: false, searchable: false }
@@ -434,6 +434,11 @@
                 updateCsrf(response);
 
                 if (response.success) {
+                    if (response.person_id) {
+                        window.location.href = '<?= url('declarations/persons') ?>/' + response.person_id;
+                        return;
+                    }
+
                     form[0].reset();
                     setAntraFeedback($('#antra_id'), '', '');
                     createAntraExists = false;

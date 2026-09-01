@@ -3,11 +3,11 @@
 namespace App\Modules\Declarations\Controllers\Admin;
 
 use App\Controllers\AdminBaseController;
+use App\Models\BasicdataModel;
 use App\Modules\Declarations\Models\PersonModel;
 use App\Modules\Declarations\Presenters\PersonTablePresenter;
+use App\Modules\Declarations\Services\DeclarationNotificationService;
 use App\Modules\Declarations\Services\DeclarationPacketService;
-use App\Modules\Declarations\Services\EmploymentRelationService;
-use App\Modules\Declarations\Services\IntranetUserLinkService;
 use App\Modules\Declarations\Services\PersonService;
 use App\Modules\Declarations\Services\RecruiterService;
 use Hermawan\DataTables\DataTable;
@@ -20,20 +20,20 @@ class PersonsController extends AdminBaseController
     public $title = 'Nyilatkozat személyek';
 
     protected PersonService $personService;
-    protected EmploymentRelationService $employmentRelationService;
+    protected BasicdataModel $basicdataModel;
     protected DeclarationPacketService $declarationPacketService;
+    protected DeclarationNotificationService $notificationService;
     protected PersonTablePresenter $personTablePresenter;
     protected RecruiterService $recruiterService;
-    protected IntranetUserLinkService $intranetUserLinkService;
 
     public function __construct()
     {
         $this->personService = new PersonService();
-        $this->employmentRelationService = new EmploymentRelationService();
+        $this->basicdataModel = new BasicdataModel();
         $this->declarationPacketService = new DeclarationPacketService();
+        $this->notificationService = new DeclarationNotificationService();
         $this->personTablePresenter = new PersonTablePresenter();
         $this->recruiterService = new RecruiterService();
-        $this->intranetUserLinkService = new IntranetUserLinkService();
     }
 
     public function index()
@@ -117,7 +117,7 @@ class PersonsController extends AdminBaseController
             }
 
             return redirect()->to(url('declarations/persons'))
-                ->with('sSuccess', 'Személy létrehozva. A listában megnyitható a személy adatlapja, ha jogviszonyt vagy nyilatkozatcsomagot indítanál.');
+                ->with('sSuccess', 'Személy létrehozva. A listában megnyitható a személy adatlapja, ha nyilatkozatcsomagot indítanál.');
         } catch (Throwable $e) {
             $this->logFailure('person_create', $e);
 
@@ -315,204 +315,64 @@ class PersonsController extends AdminBaseController
                 ->with('sError', 'A keresett személy nem található.');
         }
 
-        $relations = $this->employmentRelationService->findByPersonId($id);
-        $divisions = $this->employmentRelationService->getActiveDivisions();
-        $locations = $this->employmentRelationService->getActiveLocations();
+        $divisions = $this->basicdataModel
+            ->where('type', 'division')
+            ->where('status', 1)
+            ->orderBy('name', 'ASC')
+            ->findAll();
         $recruiters = $this->recruiterService->getRecruiters();
         $recruiterDisplayNames = $this->recruiterService->getRecruiterDisplayMap();
-        $linkedIntranetUser = $this->intranetUserLinkService->linkedUserForPerson($id);
-        $intranetUserCandidates = $linkedIntranetUser ? [] : $this->intranetUserLinkService->candidatesForPerson($id);
+        $defaultRecruiterUserId = $this->defaultRecruiterUserId($recruiters);
         $templates = $this->declarationPacketService->getAvailableTemplates((int) date('Y'));
-        $taxTemplates = $this->declarationPacketService->getCandidateSelectableTaxTemplates((int) date('Y'));
         $packets = $this->declarationPacketService->findPacketsByPersonId($id);
-        $openPacketRelationIds = [];
-        $openPacketCompanyIds = [];
-        $openPacketsByRelationId = [];
-        $openPacketsByCompanyId = [];
-        $draftPacketsByRelationId = [];
+        $blockingPacket = null;
 
         foreach ($packets as $packet) {
-            $relationId = (int) $packet->employment_relation_id;
-            $companyId = (int) $packet->company_id;
             $isOpenPacket = !in_array((string) $packet->status, ['closed', 'cancelled'], true);
 
-            if ((string) $packet->status === 'draft') {
-                $draftPacketsByRelationId[$relationId] ??= $packet;
-            }
-
-            if ($isOpenPacket) {
-                $openPacketRelationIds[$relationId] = true;
-                $openPacketCompanyIds[$companyId] = true;
-                $openPacketsByRelationId[$relationId] ??= $packet;
-                $openPacketsByCompanyId[$companyId] ??= $packet;
+            if ($isOpenPacket && $blockingPacket === null) {
+                $blockingPacket = $packet;
             }
         }
 
         return view('App\Modules\Declarations\Views\admin\persons\show', [
             'person' => $person,
-            'relations' => $relations,
             'divisions' => $divisions,
-            'locations' => $locations,
             'recruiters' => $recruiters,
             'recruiterDisplayNames' => $recruiterDisplayNames,
-            'linkedIntranetUser' => $linkedIntranetUser,
-            'intranetUserCandidates' => $intranetUserCandidates,
+            'defaultRecruiterUserId' => $defaultRecruiterUserId,
             'templates' => $templates,
-            'taxTemplates' => $taxTemplates,
             'packets' => $packets,
-            'openPacketRelationIds' => $openPacketRelationIds,
-            'openPacketCompanyIds' => $openPacketCompanyIds,
-            'openPacketsByRelationId' => $openPacketsByRelationId,
-            'openPacketsByCompanyId' => $openPacketsByCompanyId,
-            'draftPacketsByRelationId' => $draftPacketsByRelationId,
+            'blockingPacket' => $blockingPacket,
         ]);
     }
 
-    public function linkIntranetUser(int $personId)
-    {
-        $this->permissionCheck('declarations_persons_edit');
-        postAllowed();
-
-        try {
-            $this->intranetUserLinkService->linkExistingUser(
-                $personId,
-                (int) $this->request->getPost('user_id')
-            );
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sSuccess', 'Intranet felhasználó kapcsolva.');
-        } catch (Throwable $e) {
-            $this->logFailure('person_intranet_link', $e);
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sError', $e->getMessage());
-        }
-    }
-
-    public function prepareIntranetUserAdd(int $personId)
-    {
-        $this->permissionCheck('declarations_persons_edit');
-        postAllowed();
-
-        try {
-            $this->intranetUserLinkService->flashUserAddPrefillForPerson($personId);
-
-            return redirect()
-                ->to(url('users/add'))
-                ->with('sInfo', 'Az intranet felhasználó létrehozó űrlapot előtöltöttük a nyilatkozati személy ismert adataival.');
-        } catch (Throwable $e) {
-            $this->logFailure('person_intranet_user_add_prefill', $e);
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sError', $e->getMessage());
-        }
-    }
-
-    public function createRelation(int $personId)
-    {
-        $this->permissionCheck('declarations_relations_create');
-        postAllowed();
-
-        try {
-            $this->employmentRelationService->createForPerson($personId, $this->request->getPost());
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sSuccess', 'Jogviszony sikeresen létrehozva.');
-        } catch (Throwable $e) {
-            $this->logFailure('relation_create', $e);
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->withInput()
-                ->with('sError', $e->getMessage());
-        }
-    }
-
-    public function closeRelation(int $personId, int $relationId)
-    {
-        if (!hasPermissions('declarations_admin_override') && !hasPermissions('declarations_review_payroll')) {
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sError', 'Nincs jogosultságod jogviszony lezárására.');
-        }
-
-        postAllowed();
-
-        try {
-            $this->employmentRelationService->closeRelation(
-                $personId,
-                $relationId,
-                (string) $this->request->getPost('end_date')
-            );
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sSuccess', 'Jogviszony lezárva.');
-        } catch (Throwable $e) {
-            $this->logFailure('relation_close', $e);
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->withInput()
-                ->with('sError', $e->getMessage());
-        }
-    }
-
-    public function reopenRelation(int $personId, int $relationId)
-    {
-        if (!hasPermissions('declarations_admin_override')) {
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sError', 'Nincs jogosultságod jogviszony visszanyitására.');
-        }
-
-        postAllowed();
-
-        try {
-            $this->employmentRelationService->reopenRelation($personId, $relationId);
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sSuccess', 'Jogviszony visszanyitva.');
-        } catch (Throwable $e) {
-            $this->logFailure('relation_reopen', $e);
-
-            return redirect()
-                ->to(url('declarations/persons/' . $personId))
-                ->with('sError', $e->getMessage());
-        }
-    }
-
-    public function createPacket(int $personId, int $relationId)
+    public function createPacketForPerson(int $personId)
     {
         $this->permissionCheck('declarations_packets_create');
         postAllowed();
 
+        $packetId = null;
+
         try {
-            $templateIds = $this->request->getPost('template_ids') ?? [];
-            $taxYear = $this->request->getPost('tax_year');
-
-            $taxYear = $taxYear !== null && $taxYear !== '' ? (int) $taxYear : null;
-
-            if ($this->request->getPost('packet_mode') === 'default_onboarding') {
-                $packetId = $this->declarationPacketService->createDefaultOnboardingForRelation($relationId, $taxYear);
-            } else {
-                $packetId = $this->declarationPacketService->createForRelation(
-                    $relationId,
-                    is_array($templateIds) ? $templateIds : [],
-                    $taxYear
-                );
-            }
+            $packetId = $this->declarationPacketService->createForPersonProcess(
+                $personId,
+                $this->request->getPost()
+            );
+            $invitation = $this->declarationPacketService->createNewInvitationLink($packetId);
+            $this->notificationService->notifyInvitationLinkCreated($packetId, $invitation['url']);
 
             return redirect()
                 ->to(url('declarations/packets/' . $packetId))
-                ->with('sSuccess', 'Nyilatkozatcsomag létrehozva.');
+                ->with('sSuccess', 'A nyilatkozatcsomag létrejött, és a kitöltési meghívót elküldtük.');
         } catch (Throwable $e) {
-            $this->logFailure('packet_create_for_relation', $e);
+            $this->logFailure('packet_create_for_person', $e);
+
+            if ($packetId !== null) {
+                return redirect()
+                    ->to(url('declarations/packets/' . $packetId))
+                    ->with('sError', 'A csomag létrejött, de a meghívó kiküldése nem sikerült. Az oldalon új meghívót küldhetsz. Részletek: ' . $e->getMessage());
+            }
 
             return redirect()
                 ->to(url('declarations/persons/' . $personId))
@@ -555,6 +415,23 @@ class PersonsController extends AdminBaseController
             'phone' => $person->phone ?? '',
             'status' => $person->status ?? 'active',
         ];
+    }
+
+    private function defaultRecruiterUserId(array $recruiters): int
+    {
+        $loggedUserId = function_exists('logged') ? (int) logged('id') : 0;
+
+        if ($loggedUserId <= 0) {
+            return 0;
+        }
+
+        foreach ($recruiters as $recruiter) {
+            if ((int) ($recruiter->id ?? 0) === $loggedUserId) {
+                return $loggedUserId;
+            }
+        }
+
+        return 0;
     }
 
     private function jsonResponse(array $payload, int $status = 200)

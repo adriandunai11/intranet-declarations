@@ -95,6 +95,7 @@ class InvitationController extends BaseController
                 'canFinalize' => $this->submissionService->canFinalize($context),
                 'removableItemIds' => $this->removableItemIds($context, $items),
                 'summaryRowsByItemId' => $this->summaryRowsByItemId($context, $items),
+                'summaryTablesByItemId' => $this->summaryTablesByItemId($context, $items),
             ]);
         } catch (Throwable $e) {
             return $this->invalid($e->getMessage());
@@ -219,6 +220,7 @@ class InvitationController extends BaseController
                 'finalizeUrl' => $this->urlService->finalize($context->token),
                 'removableItemIds' => $this->removableItemIds($context, $items),
                 'summaryRowsByItemId' => $this->summaryRowsByItemId($context, $items),
+                'summaryTablesByItemId' => $this->summaryTablesByItemId($context, $items),
             ]);
         } catch (Throwable $e) {
             return $this->invalid($e->getMessage());
@@ -286,6 +288,10 @@ class InvitationController extends BaseController
                     'item' => $item,
                     'submission' => $submission,
                     'displayRows' => $this->submissionPresenterRegistry->rowsFor(
+                        (string) ($item->template_code ?? ''),
+                        $submission
+                    ),
+                    'displayTables' => $this->submissionPresenterRegistry->tablesFor(
                         (string) ($item->template_code ?? ''),
                         $submission
                     ),
@@ -423,7 +429,6 @@ class InvitationController extends BaseController
                     'actor_type' => 'candidate',
                     'actor_label' => 'Kitöltő',
                     'person_id' => (int) $context->person->id,
-                    'employment_relation_id' => (int) $context->packet->employment_relation_id,
                     'invitation_id' => (int) $context->invitation->id,
                     'submitted_length' => $submittedLength,
                     'expected_present' => $expectedPresent,
@@ -453,6 +458,31 @@ class InvitationController extends BaseController
         }
 
         return $rowsByItemId;
+    }
+
+    protected function summaryTablesByItemId(InvitationContext $context, array $items): array
+    {
+        $submissionsByItemId = $this->submissionService->submissionsByItemId((int) $context->packet->id);
+        $tablesByItemId = [];
+
+        foreach ($items as $item) {
+            $submission = $submissionsByItemId[(int) $item->id] ?? null;
+
+            if (!$submission) {
+                continue;
+            }
+
+            $tables = $this->submissionPresenterRegistry->tablesFor(
+                (string) ($item->template_code ?? ''),
+                $submission
+            );
+
+            if ($tables !== []) {
+                $tablesByItemId[(int) $item->id] = $tables;
+            }
+        }
+
+        return $tablesByItemId;
     }
 
     protected function removableItemIds(InvitationContext $context, array $items): array

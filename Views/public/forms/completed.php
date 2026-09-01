@@ -18,6 +18,7 @@ $statusSubText = $submission && !empty($submission->submitted_at)
 $helperText = $isAccepted
     ? 'A nyilatkozat elfogadva. Ha mégis módosítás szükséges, azt a kapcsolattartó jelzi.'
     : 'Ha módosítani szeretné az adatokat, lépjen vissza az összesítőhöz, és nyissa meg újra a nyilatkozatot.';
+$displayTables = is_array($displayTables ?? null) ? $displayTables : [];
 ?>
 
 <div class="submitted-layout">
@@ -39,9 +40,6 @@ $helperText = $isAccepted
             <?= esc($helperText) ?>
         </p>
 
-        <?php if (!empty($previewUrl)): ?>
-            <a href="<?= esc($previewUrl) ?>" class="btn btn-primary btn-block" target="_blank" rel="noopener">PDF előnézet</a>
-        <?php endif; ?>
     </aside>
 
     <main class="submitted-main">
@@ -55,17 +53,49 @@ $helperText = $isAccepted
                 <span class="badge <?= $isAccepted ? 'badge-completed' : 'badge-review' ?>"><?= esc($statusText) ?></span>
             </div>
 
-            <?php if (!empty($displayRows)): ?>
+            <?php if (!empty($displayRows) || !empty($displayTables)): ?>
                 <div class="data-review-card">
                     <div class="data-review-title"><?= esc($item->template_name ?? 'Nyilatkozat') ?></div>
-                    <dl class="data-review-list">
-                        <?php foreach ($displayRows as $label => $value): ?>
-                            <div>
-                                <dt><?= esc($label) ?></dt>
-                                <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                    <?php if (!empty($displayRows)): ?>
+                        <dl class="data-review-list">
+                            <?php foreach ($displayRows as $label => $value): ?>
+                                <div>
+                                    <dt><?= esc($label) ?></dt>
+                                    <dd><?= esc($value !== '' ? $value : '-') ?></dd>
+                                </div>
+                            <?php endforeach; ?>
+                        </dl>
+                    <?php endif; ?>
+
+                    <?php foreach ($displayTables as $table): ?>
+                        <?php
+                        $tableColumns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+                        $tableRows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+                        ?>
+                        <?php if (!empty($tableColumns) && !empty($tableRows)): ?>
+                            <div class="data-review-title mt-public"><?= esc($table['title'] ?? 'Táblázat') ?></div>
+                            <div class="completed-data-table-wrap">
+                                <table class="completed-data-table">
+                                    <thead>
+                                        <tr>
+                                            <?php foreach ($tableColumns as $column): ?>
+                                                <th><?= esc($column) ?></th>
+                                            <?php endforeach; ?>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($tableRows as $tableRow): ?>
+                                            <tr>
+                                                <?php foreach ($tableColumns as $columnIndex => $column): ?>
+                                                    <td data-label="<?= esc($column) ?>"><?= esc($tableRow[$columnIndex] ?? '-') ?></td>
+                                                <?php endforeach; ?>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             </div>
-                        <?php endforeach; ?>
-                    </dl>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
                 </div>
             <?php else: ?>
                 <div class="empty-state">Ehhez a nyilatkozathoz nincs megjeleníthető adat.</div>

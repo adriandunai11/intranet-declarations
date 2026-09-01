@@ -27,7 +27,6 @@ class DeclarationAuditLogModel extends Model
     public const ACTION_OPTIONAL_TEMPLATE_ADDED = 'optional_template_added';
     public const ACTION_OPTIONAL_TEMPLATE_REMOVED = 'optional_template_removed';
     public const ACTION_PERSON_DATA_UPDATED = 'person_data_updated_from_submission';
-    public const ACTION_RELATION_STATUS_CHANGED = 'relation_status_changed';
     public const ACTION_INVITATION_EMAIL_SENT = 'invitation_email_sent';
     public const ACTION_REJECTION_EMAIL_SENT = 'rejection_email_sent';
     public const ACTION_PACKET_REVIEW_EMAIL_SENT = 'packet_review_email_sent';
@@ -46,7 +45,6 @@ class DeclarationAuditLogModel extends Model
         'entity_type',
         'entity_id',
         'person_id',
-        'employment_relation_id',
         'packet_id',
         'packet_item_id',
         'submission_id',
@@ -105,7 +103,6 @@ class DeclarationAuditLogModel extends Model
             'actor_type',
             'actor_label',
             'person_id',
-            'employment_relation_id',
             'submission_id',
             'invitation_id',
         ] as $field) {
@@ -126,6 +123,7 @@ class DeclarationAuditLogModel extends Model
                 ->where('entity_id', $packetId)
             ->groupEnd()
         ->groupEnd()
+            ->whereNotIn('entity_type', $this->legacyRelationEntityTypes())
             ->orderBy('created_at', 'DESC')
             ->limit($limit)
             ->findAll();
@@ -138,5 +136,15 @@ class DeclarationAuditLogModel extends Model
             ->orderBy('created_at', 'DESC')
             ->limit($limit)
             ->findAll();
+    }
+
+    private function legacyRelationEntityTypes(): array
+    {
+        $entityType = implode('_', ['employment', 'relation']);
+
+        return [
+            $entityType,
+            'declaration_' . $entityType,
+        ];
     }
 }

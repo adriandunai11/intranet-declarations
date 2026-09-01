@@ -36,8 +36,8 @@ class DeclarationPacket extends Entity
     protected $casts = [
         'id' => 'integer',
         'person_id' => 'integer',
-        'employment_relation_id' => 'integer',
         'company_id' => 'integer',
+        'primary_recruiter_user_id' => '?integer',
         'tax_year' => '?integer',
         'created_by_user_id' => '?integer',
     ];

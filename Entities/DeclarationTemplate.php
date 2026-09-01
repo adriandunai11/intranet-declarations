@@ -6,6 +6,12 @@ use CodeIgniter\Entity\Entity;
 
 class DeclarationTemplate extends Entity
 {
+    public const CODE_PERSONAL_DATA = 'personal_data_statement';
+
+    private const DISPLAY_PRIORITY = [
+        self::CODE_PERSONAL_DATA => 0,
+    ];
+
     public const CATEGORY_TAX_ADVANCE = 'tax_advance';
     public const CATEGORY_PAYROLL = 'payroll';
     public const CATEGORY_ONBOARDING = 'onboarding';
@@ -83,5 +89,10 @@ class DeclarationTemplate extends Entity
     public function isActive(): bool
     {
         return (bool) ($this->attributes['is_active'] ?? false);
+    }
+
+    public static function displayPriorityForCode(?string $code): int
+    {
+        return self::DISPLAY_PRIORITY[(string) $code] ?? 1000;
     }
 }

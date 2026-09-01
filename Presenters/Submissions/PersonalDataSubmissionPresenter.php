@@ -25,7 +25,7 @@ class PersonalDataSubmissionPresenter implements SubmissionPresenterInterface
 
         return [
             'Születési név' => $this->value($data, 'birth_name'),
-            'Anyja neve' => $this->value($data, 'mother_name'),
+            'Anyja születési neve' => $this->value($data, 'mother_name'),
             'Születési hely' => $this->value($data, 'birth_place'),
             'Születési dátum' => $this->value($data, 'birth_date'),
             'Adóazonosító jel' => $this->value($data, 'tax_number'),

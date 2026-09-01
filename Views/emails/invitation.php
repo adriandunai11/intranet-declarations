@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Belépéshez szükséges nyilatkozatok kitöltése</title>
+    <title><?= esc($emailTitle ?? 'Nyilatkozatok kitöltése') ?></title>
 </head>
 
 <body style="margin:0; padding:0; background:#f3f6f2; font-family:Arial, Helvetica, sans-serif; color:#1f2933;">
@@ -19,7 +19,7 @@
                                 Miell Group
                             </div>
                             <div style="font-size:14px; color:#eefbea; margin-top:4px;">
-                                Belépéshez szükséges nyilatkozatok
+                                <?= esc($emailTitle ?? 'Nyilatkozatok kitöltése') ?>
                             </div>
                         </td>
                     </tr>
@@ -35,8 +35,9 @@
                             </p>
 
                             <p style="margin:0 0 16px; font-size:15px; line-height:1.7;">
-                                A belépéshez szükséges nyilatkozatokat az alábbi biztonságos linken tudja kitölteni és
-                                beküldeni.
+                                <?= !empty($isOnboarding)
+                                    ? 'A belépéshez szükséges nyilatkozatokat az alábbi biztonságos linken tudja kitölteni és beküldeni.'
+                                    : 'A kiküldött nyilatkozatokat az alábbi biztonságos linken tudja kitölteni és beküldeni.' ?>
                             </p>
 
                             <p style="margin:0 0 20px; font-size:15px; line-height:1.7;">

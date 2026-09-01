@@ -5,11 +5,8 @@
 <?php
 $items = $items ?? [];
 $summaryRowsByItemId = $summaryRowsByItemId ?? [];
+$summaryTablesByItemId = $summaryTablesByItemId ?? [];
 $removableItemIds = $removableItemIds ?? [];
-
-$previewUrlFor = static function (object $item) use ($startUrl): string {
-    return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/preview';
-};
 
 $removeUrlFor = static function (object $item) use ($startUrl): string {
     return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/remove';
@@ -82,7 +79,7 @@ $templateMetaText = static function (object $template) use ($templateValue, $cat
                 <li>Személyes adatok helyessége</li>
                 <li>TAJ és adóazonosító</li>
                 <li>Bankszámla és egyéb nyilatkozatadatok</li>
-                <li>PDF előnézet, ahol elérhető</li>
+                <li>A nyilatkozatokban megadott további adatok</li>
             </ul>
         </div>
     </aside>
@@ -107,7 +104,7 @@ $templateMetaText = static function (object $template) use ($templateValue, $cat
                     <?php foreach ($items as $item): ?>
                         <?php
                         $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
-                        $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
+                        $summaryTables = $summaryTablesByItemId[(int) $item->id] ?? [];
                         $canRemoveCandidateSelected = !empty($removableItemIds[(int) $item->id]);
                         $itemUrl = $itemUrls[(int) $item->id] ?? '#';
                         ?>
@@ -122,9 +119,6 @@ $templateMetaText = static function (object $template) use ($templateValue, $cat
                                 </div>
                                 <div class="review-document-actions">
                                     <a href="<?= esc($itemUrl) ?>" class="btn btn-ghost btn-sm">Módosítás</a>
-                                    <?php if ($canPreview): ?>
-                                        <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">PDF előnézet</a>
-                                    <?php endif; ?>
                                     <?php if ($canRemoveCandidateSelected): ?>
                                         <form method="post" action="<?= esc($removeUrlFor($item)) ?>" class="inline-action-form">
                                             <?= csrf_field() ?>
@@ -135,9 +129,9 @@ $templateMetaText = static function (object $template) use ($templateValue, $cat
                                 </div>
                             </header>
 
-                            <?php if (empty($summaryRows)): ?>
+                            <?php if (empty($summaryRows) && empty($summaryTables)): ?>
                                 <div class="empty-state">Ehhez a nyilatkozathoz nincs megjeleníthető mentett adat.</div>
-                            <?php else: ?>
+                            <?php elseif (!empty($summaryRows)): ?>
                                 <dl class="review-data-list">
                                     <?php foreach ($summaryRows as $label => $value): ?>
                                         <div>
@@ -147,6 +141,36 @@ $templateMetaText = static function (object $template) use ($templateValue, $cat
                                     <?php endforeach; ?>
                                 </dl>
                             <?php endif; ?>
+
+                            <?php foreach ($summaryTables as $table): ?>
+                                <?php
+                                $tableColumns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+                                $tableRows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+                                ?>
+                                <?php if (!empty($tableColumns) && !empty($tableRows)): ?>
+                                    <div class="data-review-title mt-public"><?= esc($table['title'] ?? 'Táblázat') ?></div>
+                                    <div class="review-table-wrap">
+                                        <table class="review-table">
+                                            <thead>
+                                                <tr>
+                                                    <?php foreach ($tableColumns as $column): ?>
+                                                        <th><?= esc($column) ?></th>
+                                                    <?php endforeach; ?>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <?php foreach ($tableRows as $tableRow): ?>
+                                                    <tr>
+                                                        <?php foreach ($tableColumns as $columnIndex => $column): ?>
+                                                            <td data-label="<?= esc($column) ?>"><?= esc($tableRow[$columnIndex] ?? '-') ?></td>
+                                                        <?php endforeach; ?>
+                                                    </tr>
+                                                <?php endforeach; ?>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
                         </article>
                     <?php endforeach; ?>
                 </div>

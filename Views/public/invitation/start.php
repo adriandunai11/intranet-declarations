@@ -9,9 +9,32 @@ $isPacketClosedForCandidate = in_array($packetStatus, ['submitted', 'approved', 
 $items = $items ?? [];
 $optionalTaxTemplates = $optionalTaxTemplates ?? [];
 $summaryRowsByItemId = $summaryRowsByItemId ?? [];
+$summaryTablesByItemId = $summaryTablesByItemId ?? [];
 $removableItemIds = $removableItemIds ?? [];
 $packetFlowType = (string) ($packet->flow_type ?? '');
 $showOptionalTaxPanel = $packetFlowType !== 'onboarding' || !empty($optionalTaxTemplates);
+$pendingItems = array_values(array_filter($items, static function (object $item): bool {
+    return !in_array((string) ($item->status ?? ''), ['completed', 'accepted'], true);
+}));
+$completedItems = array_values(array_filter($items, static function (object $item): bool {
+    return in_array((string) ($item->status ?? ''), ['completed', 'accepted'], true);
+}));
+$itemGroups = [
+    [
+        'title' => 'Még kitöltendő',
+        'description' => 'Ezeket a nyilatkozatokat még ki kell tölteni vagy javítani kell.',
+        'items' => $pendingItems,
+        'empty' => 'Nincs további kitöltendő nyilatkozat.',
+    ],
+    [
+        'title' => 'Kitöltött',
+        'description' => $canModifyCompletedItems
+            ? 'A mentett nyilatkozatokat a végleges beküldésig még módosíthatja.'
+            : 'Ezeket a nyilatkozatokat már beküldte. Az adatok itt megtekinthetők.',
+        'items' => $completedItems,
+        'empty' => 'Még nincs kitöltött nyilatkozat.',
+    ],
+];
 
 $templateDetails = static function (object $template): array {
     if (method_exists($template, 'details')) {
@@ -39,13 +62,6 @@ $templateLongDescription = static function (object $template) use ($templateDeta
     $details = $templateDetails($template);
 
     return trim((string) ($details['long_description'] ?? $templateShortDescription($template)));
-};
-
-$templateKeywords = static function (object $template) use ($templateDetails): array {
-    $details = $templateDetails($template);
-    $keywords = $details['keywords'] ?? [];
-
-    return is_array($keywords) ? array_values(array_filter(array_map('strval', $keywords))) : [];
 };
 
 $templateValue = static function (object $template, array $keys): string {
@@ -98,28 +114,17 @@ $templateMetaText = static function (object $template) use ($templateAreaLabel, 
     return implode(' · ', array_filter($parts));
 };
 
-$templateVersion = static function (object $template) use ($templateValue): string {
-    return $templateValue($template, ['template_version', 'version']) ?: '1.0';
-};
-
 $itemStats = [
     'total' => count($items),
     'done' => 0,
     'todo' => 0,
     'rejected' => 0,
-    'previewable' => 0,
 ];
 
 $nextItem = null;
 
 foreach ($items as $statsItem) {
     $status = (string) ($statsItem->status ?? '');
-    $summaryRows = $summaryRowsByItemId[(int) $statsItem->id] ?? [];
-    $isPreviewable = !empty($summaryRows) && (string) ($statsItem->template_code ?? '') !== 'personal_data_statement';
-
-    if ($isPreviewable) {
-        $itemStats['previewable']++;
-    }
 
     if (in_array($status, ['completed', 'accepted'], true)) {
         $itemStats['done']++;
@@ -146,13 +151,18 @@ $nextItemLabel = $nextItem && (string) $nextItem->status === 'rejected'
     ? 'Javítás megnyitása'
     : 'Kitöltés folytatása';
 
+$readOnlyPacketLabels = [
+    'submitted' => 'Beküldve, ellenőrzés alatt',
+    'approved' => 'Elfogadva, lezárásra vár',
+    'completed' => 'Elfogadva, lezárásra vár',
+    'closed' => 'Lezárva',
+];
 $statusLabel = $isPacketClosedForCandidate
-    ? 'Beküldve'
+    ? ($readOnlyPacketLabels[$packetStatus] ?? 'Beküldve')
     : (!empty($canFinalize) ? 'Beküldhető' : 'Kitöltés alatt');
-
-$previewUrlFor = static function (object $item) use ($startUrl): string {
-    return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/preview';
-};
+$readOnlyPacketNotice = in_array($packetStatus, ['approved', 'completed'], true)
+    ? 'A nyilatkozatcsomagot a munkaügy elfogadta. A beküldött adatok a munkaügyi lezárásig itt megtekinthetők.'
+    : 'A nyilatkozatcsomag véglegesen beküldve. A beküldött adatok a munkaügyi lezárásig itt megtekinthetők.';
 
 $removeUrlFor = static function (object $item) use ($startUrl): string {
     return rtrim((string) $startUrl, '/') . '/item/' . (int) $item->id . '/remove';
@@ -197,7 +207,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                 <?php elseif ($nextItem): ?>
                     Haladjon tovább a következő kitöltendő vagy javítandó nyilatkozattal. Ha egy választható nyilatkozat nem szükséges, a Nem kérem gombbal eltávolítható.
                 <?php elseif ($isPacketClosedForCandidate): ?>
-                    A csomag beküldve, az adatok a link érvényességéig megtekinthetők.
+                    <?= esc($readOnlyPacketNotice) ?>
                 <?php else: ?>
                     Jelenleg nincs megnyitható teendő.
                 <?php endif; ?>
@@ -255,27 +265,29 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             </section>
         <?php elseif ($isPacketClosedForCandidate): ?>
             <section class="notice notice-success">
-                A nyilatkozatcsomag véglegesen beküldve. A beküldött adatok a link érvényességéig itt megtekinthetők.
+                <?= esc($readOnlyPacketNotice) ?>
             </section>
         <?php endif; ?>
 
-        <section class="content-card document-panel document-panel-wide" id="required-declarations">
-            <div class="section-heading">
-                <div>
-                    <h2>Nyilatkozatok</h2>
-                    <p class="section-note">A megtekintés gombbal az adott nyilatkozat részletes adatai nyílnak meg. A PDF előnézet a mentett online űrlapadatokból készül.</p>
+        <?php foreach ($itemGroups as $groupIndex => $itemGroup): ?>
+            <section class="content-card document-panel document-panel-wide"<?= $groupIndex === 0 ? ' id="required-declarations"' : '' ?>>
+                <div class="section-heading">
+                    <div>
+                        <h2><?= esc($itemGroup['title']) ?></h2>
+                        <p class="section-note"><?= esc($itemGroup['description']) ?></p>
+                    </div>
+                    <span class="status-pill"><?= count($itemGroup['items']) ?> db</span>
                 </div>
-            </div>
 
-            <?php if (empty($items)): ?>
-                <div class="notice notice-warning">Ehhez a csomaghoz jelenleg nincs kitöltendő nyilatkozat.</div>
-            <?php else: ?>
+                <?php if (empty($itemGroup['items'])): ?>
+                    <div class="empty-state"><?= esc($itemGroup['empty']) ?></div>
+                <?php else: ?>
                 <ul class="task-list task-list-wide">
-                    <?php foreach ($items as $item): ?>
+                    <?php foreach ($itemGroup['items'] as $item): ?>
                         <?php
                         $status = (string) ($item->status ?? '');
                         $summaryRows = $summaryRowsByItemId[(int) $item->id] ?? [];
-                        $canPreview = !empty($summaryRows) && (string) ($item->template_code ?? '') !== 'personal_data_statement';
+                        $summaryTables = $summaryTablesByItemId[(int) $item->id] ?? [];
                         $canRemoveCandidateSelected = !empty($removableItemIds[(int) $item->id]);
                         $badgeClass = 'badge-default';
                         $statusLabelForItem = 'Állapot ismeretlen';
@@ -288,6 +300,12 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                             $statusLabelForItem = 'Kitöltésre vár';
                             $stateClass = 'state-pending';
                             $actionLabel = 'Kitöltés';
+                            $actionButtonClass = 'btn btn-primary btn-sm';
+                        } elseif ($status === 'in_progress') {
+                            $badgeClass = 'badge-pending';
+                            $statusLabelForItem = 'Kitöltés megkezdve';
+                            $stateClass = 'state-pending';
+                            $actionLabel = 'Kitöltés folytatása';
                             $actionButtonClass = 'btn btn-primary btn-sm';
                         } elseif ($status === 'completed') {
                             $badgeClass = $canModifyCompletedItems ? 'badge-completed' : 'badge-review';
@@ -308,7 +326,6 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                         }
 
                         $itemUrl = $itemUrls[(int) $item->id] ?? '#';
-                        $itemDetails = $templateDetails($item);
                         $itemDialogId = 'template-detail-item-' . (int) $item->id;
                         ?>
                         <li class="task-item <?= esc($stateClass) ?> <?= $status === 'rejected' ? 'task-item-warning' : '' ?>">
@@ -324,23 +341,26 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                                 <?php endif; ?>
 
                                 <?php if (!empty($summaryRows)): ?>
-                                    <dl class="review-data-list task-summary-list">
-                                        <?php foreach (array_slice($summaryRows, 0, 6, true) as $label => $value): ?>
-                                            <div><dt><?= esc($label) ?></dt><dd><?= esc($value !== '' ? $value : '-') ?></dd></div>
-                                        <?php endforeach; ?>
-                                    </dl>
-                                    <?php if (count($summaryRows) > 6): ?>
-                                        <div class="task-meta">További adatok az ellenőrző oldalon és a PDF előnézetben láthatók.</div>
-                                    <?php endif; ?>
+                                    <details class="task-summary-details">
+                                        <summary>Mentett adatok megtekintése</summary>
+                                        <dl class="review-data-list task-summary-list">
+                                            <?php foreach (array_slice($summaryRows, 0, 6, true) as $label => $value): ?>
+                                                <div><dt><?= esc($label) ?></dt><dd><?= esc($value !== '' ? $value : '-') ?></dd></div>
+                                            <?php endforeach; ?>
+                                        </dl>
+                                        <?php if (count($summaryRows) > 6): ?>
+                                            <div class="task-meta">A további adatok az ellenőrző oldalon láthatók.</div>
+                                        <?php endif; ?>
+                                    </details>
+                                <?php endif; ?>
+                                <?php if (!empty($summaryTables)): ?>
+                                    <div class="task-meta">A táblázatos adatok az ellenőrző oldalon láthatók.</div>
                                 <?php endif; ?>
                             </div>
                             <div class="task-side task-side-horizontal">
                                 <span class="badge <?= esc($badgeClass) ?>"><?= esc($statusLabelForItem) ?></span>
-                                <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($itemDialogId) ?>">Részletek</button>
+                                <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($itemDialogId) ?>">Leírás</button>
                                 <a href="<?= esc($itemUrl) ?>" class="<?= esc($actionButtonClass) ?>"><?= esc($actionLabel) ?></a>
-                                <?php if ($canPreview): ?>
-                                    <a href="<?= esc($previewUrlFor($item)) ?>" class="btn btn-secondary btn-sm" target="_blank" rel="noopener">PDF előnézet</a>
-                                <?php endif; ?>
                                 <?php if ($canRemoveCandidateSelected): ?>
                                     <form method="post" action="<?= esc($removeUrlFor($item)) ?>" class="inline-action-form">
                                         <?= csrf_field() ?>
@@ -351,14 +371,15 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                         </li>
                     <?php endforeach; ?>
                 </ul>
-            <?php endif; ?>
-        </section>
+                <?php endif; ?>
+            </section>
+        <?php endforeach; ?>
 
         <?php if ($showOptionalTaxPanel): ?>
             <section class="content-card optional-tax-panel" id="optional-tax">
                 <div class="section-heading">
                     <div>
-                        <h2>Választható adóügyi nyilatkozatok</h2>
+                        <h2>Választható</h2>
                         <p class="section-note">Csak azt válassza ki, amely Önre vonatkozik, vagy amelyről nyilatkozni szeretne.</p>
                     </div>
                 </div>
@@ -388,7 +409,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
                                     <?php else: ?>
                                         <span class="badge badge-default">Előkészítés alatt</span>
                                     <?php endif; ?>
-                                    <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($dialogId) ?>">Részletek</button>
+                                    <button type="button" class="btn btn-ghost btn-sm" data-template-details-target="<?= esc($dialogId) ?>">Leírás</button>
                                 </div>
                             </li>
                         <?php endforeach; ?>
@@ -403,7 +424,6 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
     <?php
     $details = $templateDetails($item);
     $dialogId = 'template-detail-item-' . (int) $item->id;
-    $keywords = $templateKeywords($item);
     $isTaxItem = $isTaxTemplate($item);
     ?>
     <dialog class="confirm-dialog" id="<?= esc($dialogId) ?>">
@@ -412,16 +432,11 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             <p><?= nl2br(esc($templateLongDescription($item) ?: 'Ehhez a nyilatkozathoz nincs külön részletes leírás rögzítve.')) ?></p>
             <dl class="review-data-list">
                 <div><dt>Terület</dt><dd><?= esc($templateAreaLabel($item)) ?></dd></div>
-                <div><dt>Űrlapverzió</dt><dd><?= esc($templateVersion($item)) ?></dd></div>
                 <?php if ($isTaxItem): ?>
                     <div><dt>Adóév</dt><dd><?= esc($templateTaxYear($item)) ?></dd></div>
-                    <div><dt>Adóügyi csoport</dt><dd><?= esc($details['tax_group'] ?? '-') ?></dd></div>
                     <div><dt>Kinek szól</dt><dd><?= esc($details['taxpayer_scope'] ?? '-') ?></dd></div>
                 <?php elseif (!empty($details['taxpayer_scope']) && (string) $details['taxpayer_scope'] !== '-'): ?>
                     <div><dt>Kinek szól</dt><dd><?= esc($details['taxpayer_scope']) ?></dd></div>
-                <?php endif; ?>
-                <?php if ($keywords !== []): ?>
-                    <div><dt>Kulcsszavak</dt><dd><?= esc(implode(', ', $keywords)) ?></dd></div>
                 <?php endif; ?>
             </dl>
             <div class="confirm-dialog-actions">
@@ -435,7 +450,6 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
     <?php
     $details = $templateDetails($template);
     $dialogId = 'template-detail-' . (int) $template->id;
-    $keywords = $templateKeywords($template);
     ?>
     <dialog class="confirm-dialog" id="<?= esc($dialogId) ?>">
         <div class="confirm-dialog-card">
@@ -444,12 +458,7 @@ $removeUrlFor = static function (object $item) use ($startUrl): string {
             <dl class="review-data-list">
                 <div><dt>Terület</dt><dd><?= esc($templateAreaLabel($template)) ?></dd></div>
                 <div><dt>Adóév</dt><dd><?= esc($templateTaxYear($template)) ?></dd></div>
-                <div><dt>Űrlapverzió</dt><dd><?= esc($templateVersion($template)) ?></dd></div>
-                <div><dt>Adóügyi csoport</dt><dd><?= esc($details['tax_group'] ?? '-') ?></dd></div>
                 <div><dt>Kinek szól</dt><dd><?= esc($details['taxpayer_scope'] ?? '-') ?></dd></div>
-                <?php if ($keywords !== []): ?>
-                    <div><dt>Kulcsszavak</dt><dd><?= esc(implode(', ', $keywords)) ?></dd></div>
-                <?php endif; ?>
             </dl>
             <div class="confirm-dialog-actions">
                 <button type="button" class="btn btn-secondary" data-template-details-close>Vissza</button>

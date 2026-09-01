@@ -25,24 +25,25 @@ class TaxDeclarationSchemaService
         return [
             'family_tax_discount' => [
                 'eyebrow' => 'Családi kedvezmény',
-                'title' => 'Családi kedvezmény nyilatkozat',
-                'intro' => 'Az alap személyes adatokat a rendszer automatikusan tölti. Itt csak a kedvezményhez szükséges döntéseket és az eltartottakat kell megadni.',
+                'title' => 'Családi kedvezmény',
+                'intro' => 'Adja meg, hogyan kéri a családi kedvezményt, majd rögzítse azokat a gyermekeket vagy más eltartottakat, akik alapján jogosult rá.',
                 'sections' => [
                     [
-                        'title' => 'Igénylés módja',
-                        'note' => 'Válassza ki, hogyan kéri a családi kedvezmény érvényesítését.',
+                        'title' => 'A kedvezmény igénylése',
+                        'note' => 'A két megadási mód közül csak az egyiket kell választania.',
                         'fields' => [
-                            $this->select('claim_scope', 'Érvényesítés módja', [
+                            $this->checkbox('modified_statement', 'Korábban leadott nyilatkozatot módosítok'),
+                            $this->select('claim_scope', 'Hogyan érvényesíti a kedvezményt?', [
                                 'alone' => 'Egyedül érvényesítem',
-                                'shared' => 'Jogosult házastárssal vagy élettárssal közösen',
+                                'shared' => 'Másik jogosulttal közösen érvényesítem',
                             ], true),
-                            $this->select('calculation_mode', 'Kedvezmény kitöltése', [
+                            $this->select('calculation_mode', 'Hogyan adja meg a kért kedvezményt?', [
                                 'amount' => 'Havi forintösszeget adok meg',
-                                'dependents' => 'Kedvezményezett eltartottak száma alapján kérem',
+                                'dependents' => 'A kedvezményezett eltartottak számát adom meg',
                             ], true),
                             $this->visibleWhen(
                                 $this->requiredWhen(
-                                    $this->number('monthly_amount', 'Havi összeg forintban', false, 'Csak akkor töltse, ha konkrét havi összeget szeretne megadni.'),
+                                    $this->number('monthly_amount', 'Kért havi összeg (Ft)', false, 'A munkáltatónál érvényesítendő havi összeget adja meg.'),
                                     'calculation_mode',
                                     'amount'
                                 ),
@@ -58,79 +59,197 @@ class TaxDeclarationSchemaService
                                 'calculation_mode',
                                 'dependents'
                             ),
-                            $this->checkbox('foreign_discount_taken', 'Külföldi jövedelem után azonos vagy hasonló kedvezményt veszek igénybe'),
-                            $this->checkbox('skip_contribution_discount', 'Nem kérem a családi járulékkedvezmény havi érvényesítését'),
+                            $this->checkbox(
+                                'foreign_eligibility_confirmed',
+                                'Kijelentem, hogy a kedvezményt Magyarországon jogosult vagyok érvényesíteni, és ugyanarra az időszakra külföldön nem veszek igénybe azonos vagy hasonló kedvezményt.',
+                                true
+                            ),
+                            $this->checkbox(
+                                'skip_contribution_discount',
+                                'Nem kérem, hogy a munkáltató a fel nem használt részt családi járulékkedvezményként érvényesítse'
+                            ),
                         ],
                     ],
                     $this->spouseSection(false),
                 ],
                 'repeaters' => [
-                    $this->dependentRepeater(1, 12, 'Eltartottak adatai', 'Ha több gyermek van, adjon hozzá új sort. A nyilatkozatba az összes sor mentésre kerül.'),
+                    $this->dependentRepeater(
+                        1,
+                        12,
+                        'Gyermekek és eltartottak',
+                        'Minden gyermekhez vagy eltartotthoz külön adatlap tartozik. Magzat esetén nem kérünk nevet és adóazonosító jelet.'
+                    ),
                 ],
             ],
             'first_marriage_discount' => [
-                'eyebrow' => 'Első házasok',
+                'eyebrow' => 'Első házasok kedvezménye',
                 'title' => 'Első házasok kedvezménye',
-                'intro' => 'A saját név és adóazonosító automatikusan kerül a nyilatkozatra. Itt a házastárs és az igénylés adatai szükségesek.',
+                'intro' => 'A kedvezményt a házastársak közösen érvényesítik. Itt azt az összeget adja meg, amelyet ennél a munkáltatónál szeretne figyelembe venni.',
                 'sections' => [
                     [
-                        'title' => 'Házasság és igénylés',
-                        'note' => 'A kedvezményhez a házastárs adatai és a házasságkötés időpontja szükséges.',
+                        'title' => 'Igénylés adatai',
+                        'note' => 'A kedvezmény legfeljebb 24 jogosultsági hónapra jár.',
                         'fields' => [
-                            $this->date('marriage_date', 'Házasságkötés dátuma', true),
-                            $this->select('claim_scope', 'Érvényesítés módja', [
-                                'alone' => 'Egyedül kérem',
-                                'shared' => 'Házastárssal megosztva kérem',
+                            $this->requiredWhen(
+                                $this->checkbox('modified_statement', 'Korábban leadott nyilatkozatot módosítok'),
+                                'declaration_action',
+                                'stop'
+                            ),
+                            $this->select('declaration_action', 'Mit szeretne tenni?', [
+                                'claim' => 'Kérem a kedvezmény figyelembevételét',
+                                'stop' => 'A továbbiakban nem kérem a kedvezményt',
                             ], true),
                             $this->visibleWhen(
                                 $this->requiredWhen(
-                                    $this->number('monthly_amount', 'Havi megosztott összeg forintban', false),
-                                    'claim_scope',
-                                    'shared'
+                                    $this->notFuture(
+                                        $this->date('marriage_date', 'Házasságkötés dátuma vagy a jogosultság kezdőnapja')
+                                    ),
+                                    'declaration_action',
+                                    'claim'
                                 ),
-                                'claim_scope',
-                                'shared'
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->month('claim_from_month', 'Melyik hónaptól kéri?'),
+                                    'declaration_action',
+                                    'claim'
+                                ),
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->number('monthly_amount', 'Ennél a munkáltatónál kért havi összeg (Ft)'),
+                                    'declaration_action',
+                                    'claim'
+                                ),
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->select('duration_mode', 'Meddig vegyék figyelembe?', [
+                                        'tax_year' => 'Csak ebben az adóévben',
+                                        'continuous' => 'Visszavonásig, legfeljebb a jogosultsági időszak végéig',
+                                    ]),
+                                    'declaration_action',
+                                    'claim'
+                                ),
+                                'declaration_action',
+                                'claim'
                             ),
                         ],
                     ],
-                    $this->spouseSection(true),
+                    $this->visibleWhenSection($this->spouseSection(true), 'declaration_action', 'claim'),
                 ],
                 'repeaters' => [],
             ],
             'personal_discount' => [
                 'eyebrow' => 'Személyi kedvezmény',
-                'title' => 'Személyi kedvezmény nyilatkozat',
-                'intro' => 'A kedvezményhez a jogosultság időszakát és szükség esetén a havi összeget kell megadni.',
+                'title' => 'Személyi kedvezmény',
+                'intro' => 'Először válassza ki, milyen igazolás vagy ellátás alapján jogosult. Ezután csak az ehhez szükséges adatokat kérjük.',
                 'sections' => [
                     [
-                        'title' => 'Jogosultság',
-                        'note' => 'A munkáltató a megadott időszak alapján veszi figyelembe a kedvezményt.',
+                        'title' => 'Nyilatkozat célja',
                         'fields' => [
-                            $this->date('eligibility_start', 'Jogosultság kezdete', true),
-                            $this->date('eligibility_end', 'Jogosultság vége', false),
-                            $this->number('monthly_amount', 'Havi kedvezmény összege', false),
-                            $this->textarea('eligibility_note', 'Megjegyzés vagy igazolás adatai', false),
+                            $this->requiredWhen(
+                                $this->checkbox('modified_statement', 'Korábban leadott nyilatkozatot módosítok'),
+                                'declaration_action',
+                                'stop'
+                            ),
+                            $this->select('declaration_action', 'Mit szeretne tenni?', [
+                                'claim' => 'Kérem a személyi kedvezmény figyelembevételét',
+                                'stop' => 'A továbbiakban nem kérem a kedvezményt',
+                            ], true),
+                        ],
+                    ],
+                    [
+                        'title' => 'A jogosultság alapja',
+                        'note' => 'A kiválasztás után csak a szükséges mezők jelennek meg.',
+                        'visible_when' => ['field' => 'declaration_action', 'value' => 'claim'],
+                        'fields' => [
+                            $this->requiredWhen(
+                                $this->select('eligibility_basis', 'Mi alapján jogosult a kedvezményre?', [
+                                    'medical_certificate' => 'Orvosi igazolás alapján',
+                                    'disability_annuity' => 'Rokkantsági járadékban részesülök',
+                                    'disability_support' => 'Fogyatékossági támogatásban részesülök',
+                                ]),
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->notFuture(
+                                        $this->date('eligibility_start', 'Az állapot kezdőnapja')
+                                    ),
+                                    'eligibility_basis',
+                                    'medical_certificate'
+                                ),
+                                'eligibility_basis',
+                                'medical_certificate'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->select('condition_duration', 'Meddig áll fenn az állapot?', [
+                                        'permanent' => 'Az állapot végleges',
+                                        'until_date' => 'Az állapotnak van befejező dátuma',
+                                    ]),
+                                    'eligibility_basis',
+                                    'medical_certificate'
+                                ),
+                                'eligibility_basis',
+                                'medical_certificate'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->date('eligibility_end', 'Az állapot utolsó napja'),
+                                    'condition_duration',
+                                    'until_date'
+                                ),
+                                'condition_duration',
+                                'until_date'
+                            ),
+                            $this->visibleWhenValues(
+                                $this->requiredWhenValues(
+                                    $this->text('decision_number', 'Határozat száma'),
+                                    'eligibility_basis',
+                                    ['disability_annuity', 'disability_support']
+                                ),
+                                'eligibility_basis',
+                                ['disability_annuity', 'disability_support']
+                            ),
+                            $this->checkbox('continuous_statement', 'A nyilatkozatot visszavonásig kérem figyelembe venni'),
+                            $this->requiredWhen(
+                                $this->checkbox(
+                                    'foreign_eligibility_confirmed',
+                                    'Kijelentem, hogy a kedvezményt Magyarországon jogosult vagyok érvényesíteni, és külföldön nem veszek igénybe azonos vagy hasonló kedvezményt.'
+                                ),
+                                'declaration_action',
+                                'claim'
+                            ),
                         ],
                     ],
                 ],
                 'repeaters' => [],
             ],
             'under_25_tax_discount_waiver' => [
-                'eyebrow' => '25 év alatti kedvezmény',
-                'title' => '25 év alatti fiatalok kedvezményének mellőzése',
-                'intro' => 'Ezt akkor töltse ki, ha a kedvezményt nem vagy csak részben szeretné igénybe venni.',
+                'eyebrow' => '25 év alattiak kedvezménye',
+                'title' => 'A 25 év alattiak kedvezményének mellőzése',
+                'intro' => 'Ezt csak akkor töltse ki, ha az automatikusan járó kedvezményt egyáltalán nem, vagy csak részben szeretné igénybe venni.',
                 'sections' => [
                     [
-                        'title' => 'Mellőzés módja',
-                        'note' => 'Teljes mellőzésnél nem kell összeget megadni. Részleges mellőzésnél adja meg a havi összeghatárt.',
+                        'title' => 'Mit kér a munkáltatótól?',
+                        'note' => 'Teljes mellőzésnél nincs szükség összegre.',
                         'fields' => [
-                            $this->select('waiver_scope', 'Mit kér?', [
-                                'full' => 'A kedvezmény teljes mellőzését kérem',
-                                'partial' => 'Csak egy megadott összeg felett kérem a mellőzést',
+                            $this->select('waiver_scope', 'A mellőzés módja', [
+                                'full' => 'Egyáltalán ne vegyék figyelembe a kedvezményt',
+                                'partial' => 'Csak egy megadott havi összeg felett ne vegyék figyelembe',
                             ], true),
                             $this->visibleWhen(
                                 $this->requiredWhen(
-                                    $this->number('monthly_limit', 'Havi összeghatár forintban', false),
+                                    $this->number('monthly_limit', 'Havi összeghatár (Ft)', false, 'Az ezt meghaladó jövedelemrészre nem kéri a kedvezményt.'),
                                     'waiver_scope',
                                     'partial'
                                 ),
@@ -143,63 +262,154 @@ class TaxDeclarationSchemaService
                 'repeaters' => [],
             ],
             'under_30_mothers_discount' => [
-                'eyebrow' => '30 év alatti anyák',
+                'eyebrow' => '30 év alatti anyák kedvezménye',
                 'title' => '30 év alatti anyák kedvezménye',
-                'intro' => 'A jogosultság alapját adó gyermek adatait és az érvényesítés módját kell megadni.',
+                'intro' => 'A jogosultság alapja lehet megszületett vagy örökbefogadott gyermek, illetve magzat. A választás után csak az ahhoz szükséges adatokat kérjük.',
                 'sections' => [
                     [
-                        'title' => 'Igénylés',
-                        'note' => 'A kedvezmény érvényesítéséhez adja meg a jogosultság kezdetét.',
+                        'title' => 'Nyilatkozat célja',
                         'fields' => [
-                            $this->date('eligibility_start', 'Jogosultság kezdete', true),
-                            $this->date('eligibility_end', 'Jogosultság vége', false),
-                            $this->checkbox('modified_statement', 'Módosító nyilatkozat'),
+                            $this->requiredWhen(
+                                $this->checkbox('modified_statement', 'Korábban leadott nyilatkozatot módosítok'),
+                                'declaration_action',
+                                'stop'
+                            ),
+                            $this->select('declaration_action', 'Mit szeretne tenni?', [
+                                'claim' => 'Kérem a kedvezmény figyelembevételét',
+                                'stop' => 'Egy megadott hónaptól nem kérem a kedvezményt',
+                            ], true),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->month('stop_from_month', 'Melyik hónaptól nem kéri?'),
+                                    'declaration_action',
+                                    'stop'
+                                ),
+                                'declaration_action',
+                                'stop'
+                            ),
+                        ],
+                    ],
+                    [
+                        'title' => 'A jogosultság alapja',
+                        'visible_when' => ['field' => 'declaration_action', 'value' => 'claim'],
+                        'fields' => [
+                            $this->requiredWhen(
+                                $this->select('eligibility_basis', 'Ki után jogosult a kedvezményre?', [
+                                    'child' => 'Megszületett vagy örökbefogadott gyermek után',
+                                    'fetus' => 'Magzat után',
+                                ]),
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->text('child_name', 'Gyermek neve'),
+                                    'eligibility_basis',
+                                    'child'
+                                ),
+                                'eligibility_basis',
+                                'child'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->text('child_tax_number', 'Gyermek adóazonosító jele', false, 'tax_number', '10 számjegy'),
+                                    'eligibility_basis',
+                                    'child'
+                                ),
+                                'eligibility_basis',
+                                'child'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->month('fetus_91st_day_month', 'A várandósság 91. napjának hónapja'),
+                                    'eligibility_basis',
+                                    'fetus'
+                                ),
+                                'eligibility_basis',
+                                'fetus'
+                            ),
                         ],
                     ],
                 ],
-                'repeaters' => [
-                    $this->childRepeater(1, 6, 'Jogosultságot megalapozó gyermek adatai'),
-                ],
+                'repeaters' => [],
             ],
             'mothers_of_four_discount' => [
-                'eyebrow' => 'Anyák kedvezménye',
+                'eyebrow' => 'Többgyermekes anyák kedvezménye',
                 'title' => 'Két, három, illetve négy vagy több gyermeket nevelő anyák kedvezménye',
-                'intro' => 'Adja meg azokat a gyermekeket, akik alapján a kedvezményre jogosult. Négy vagy több gyermek esetén további sorokat lehet hozzáadni.',
+                'intro' => 'Válassza ki, melyik kedvezményre jogosult. A gyermekeket külön adatlapokon lehet megadni.',
                 'sections' => [
                     [
-                        'title' => 'Igénylés',
-                        'note' => 'A kedvezmény érvényesítéséhez legalább két gyermeket rögzíteni kell.',
+                        'title' => 'Nyilatkozat célja',
                         'fields' => [
-                            $this->date('eligibility_start', 'Jogosultság kezdete', true),
-                            $this->date('eligibility_end', 'Jogosultság vége', false),
-                            $this->checkbox('modified_statement', 'Módosító nyilatkozat'),
+                            $this->requiredWhen(
+                                $this->checkbox('modified_statement', 'Korábban leadott nyilatkozatot módosítok'),
+                                'declaration_action',
+                                'stop'
+                            ),
+                            $this->select('declaration_action', 'Mit szeretne tenni?', [
+                                'claim' => 'Kérem a kedvezmény figyelembevételét',
+                                'stop' => 'Egy megadott hónaptól nem kérem a kedvezményt',
+                            ], true),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->select('mother_discount_type', 'Melyik kedvezményre jogosult?', $this->motherDiscountOptions()),
+                                    'declaration_action',
+                                    'claim'
+                                ),
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->checkbox('continuous_statement', 'A nyilatkozatot visszavonásig kérem figyelembe venni'),
+                                'declaration_action',
+                                'claim'
+                            ),
+                            $this->visibleWhen(
+                                $this->requiredWhen(
+                                    $this->month('stop_from_month', 'Melyik hónaptól nem kéri?'),
+                                    'declaration_action',
+                                    'stop'
+                                ),
+                                'declaration_action',
+                                'stop'
+                            ),
                         ],
                     ],
                 ],
                 'repeaters' => [
-                    $this->childRepeater(2, 12, 'Gyermekek adatai'),
+                    $this->motherChildrenRepeater('Gyermekek adatai', ['field' => 'declaration_action', 'value' => 'claim']),
                 ],
             ],
             'combined_family_mothers_discount' => [
                 'eyebrow' => 'Összevont adónyilatkozat',
-                'title' => 'Családi és anyák kedvezménye',
-                'intro' => 'Az összevont nyilatkozatban a családi kedvezmény és az anyák kedvezménye egy űrlapon adható meg.',
+                'title' => 'Családi és többgyermekes anyák kedvezménye',
+                'intro' => 'Ezen az űrlapon együtt kérheti a családi kedvezményt és a két, három, illetve négy vagy több gyermeket nevelő anyák kedvezményét.',
                 'sections' => [
                     [
-                        'title' => 'Igénylés módja',
-                        'note' => 'A kitöltött adatokból az online nyilatkozati összesítő automatikusan készül.',
+                        'title' => 'Anyakedvezmény',
                         'fields' => [
-                            $this->select('claim_scope', 'Családi kedvezmény érvényesítése', [
+                            $this->select('mother_discount_type', 'Melyik anyakedvezményre jogosult?', $this->motherDiscountOptions(), true),
+                            $this->checkbox(
+                                'foreign_eligibility_confirmed',
+                                'Kijelentem, hogy a kedvezményeket Magyarországon jogosult vagyok érvényesíteni, és ugyanarra az időszakra külföldön nem veszek igénybe azonos vagy hasonló kedvezményt.',
+                                true
+                            ),
+                        ],
+                    ],
+                    [
+                        'title' => 'Családi kedvezmény',
+                        'fields' => [
+                            $this->select('claim_scope', 'Hogyan érvényesíti a családi kedvezményt?', [
                                 'alone' => 'Egyedül érvényesítem',
-                                'shared' => 'Jogosult házastárssal vagy élettárssal közösen',
+                                'shared' => 'Másik jogosulttal közösen érvényesítem',
                             ], true),
-                            $this->select('calculation_mode', 'Családi kedvezmény kitöltése', [
+                            $this->select('calculation_mode', 'Hogyan adja meg a kért kedvezményt?', [
                                 'amount' => 'Havi forintösszeget adok meg',
-                                'dependents' => 'Kedvezményezett eltartottak száma alapján kérem',
+                                'dependents' => 'A kedvezményezett eltartottak számát adom meg',
                             ], true),
                             $this->visibleWhen(
                                 $this->requiredWhen(
-                                    $this->number('monthly_amount', 'Havi családi kedvezmény forintban', false),
+                                    $this->number('monthly_amount', 'Kért havi összeg (Ft)'),
                                     'calculation_mode',
                                     'amount'
                                 ),
@@ -208,21 +418,23 @@ class TaxDeclarationSchemaService
                             ),
                             $this->visibleWhen(
                                 $this->requiredWhen(
-                                    $this->number('beneficiary_dependents_count', 'Kedvezményezett eltartottak száma', false),
+                                    $this->number('beneficiary_dependents_count', 'Kedvezményezett eltartottak száma'),
                                     'calculation_mode',
                                     'dependents'
                                 ),
                                 'calculation_mode',
                                 'dependents'
                             ),
-                            $this->date('mother_discount_start', 'Anyák kedvezményének kezdete', false),
-                            $this->checkbox('skip_contribution_discount', 'Nem kérem a családi járulékkedvezmény havi érvényesítését'),
+                            $this->checkbox(
+                                'skip_contribution_discount',
+                                'Nem kérem, hogy a munkáltató a fel nem használt részt családi járulékkedvezményként érvényesítse'
+                            ),
                         ],
                     ],
                     $this->spouseSection(false),
                 ],
                 'repeaters' => [
-                    $this->dependentRepeater(1, 12, 'Gyermekek és eltartottak adatai', 'Négy vagy több gyermek esetén adjon hozzá további sort.'),
+                    $this->combinedDependentRepeater(),
                 ],
             ],
         ];
@@ -234,14 +446,7 @@ class TaxDeclarationSchemaService
      */
     private function select(string $key, string $label, array $options, bool $required = false, string $help = ''): array
     {
-        return [
-            'key' => $key,
-            'label' => $label,
-            'type' => 'select',
-            'required' => $required,
-            'options' => $options,
-            'help' => $help,
-        ];
+        return compact('key', 'label', 'options', 'required', 'help') + ['type' => 'select'];
     }
 
     /**
@@ -249,14 +454,7 @@ class TaxDeclarationSchemaService
      */
     private function text(string $key, string $label, bool $required = false, string $validation = '', string $help = ''): array
     {
-        return [
-            'key' => $key,
-            'label' => $label,
-            'type' => 'text',
-            'required' => $required,
-            'validation' => $validation,
-            'help' => $help,
-        ];
+        return compact('key', 'label', 'required', 'validation', 'help') + ['type' => 'text'];
     }
 
     /**
@@ -264,39 +462,53 @@ class TaxDeclarationSchemaService
      */
     private function number(string $key, string $label, bool $required = false, string $help = ''): array
     {
-        return [
-            'key' => $key,
-            'label' => $label,
+        return compact('key', 'label', 'required', 'help') + [
             'type' => 'number',
-            'required' => $required,
-            'help' => $help,
+            'min_value' => 1,
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function date(string $key, string $label, bool $required = false): array
+    private function date(string $key, string $label, bool $required = false, string $help = ''): array
     {
-        return [
-            'key' => $key,
-            'label' => $label,
-            'type' => 'date',
-            'required' => $required,
-        ];
+        return compact('key', 'label', 'required', 'help') + ['type' => 'date'];
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     * @return array<string, mixed>
+     */
+    private function notFuture(array $field): array
+    {
+        $field['not_future'] = true;
+
+        return $field;
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function checkbox(string $key, string $label): array
+    private function month(string $key, string $label, bool $required = false, string $help = ''): array
     {
-        return [
-            'key' => $key,
-            'label' => $label,
-            'type' => 'checkbox',
-            'required' => false,
-        ];
+        return compact('key', 'label', 'required', 'help') + ['type' => 'month'];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function checkbox(string $key, string $label, bool $required = false, string $help = ''): array
+    {
+        return compact('key', 'label', 'required', 'help') + ['type' => 'checkbox'];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function textarea(string $key, string $label, bool $required = false, string $help = ''): array
+    {
+        return compact('key', 'label', 'required', 'help') + ['type' => 'textarea'];
     }
 
     /**
@@ -305,10 +517,19 @@ class TaxDeclarationSchemaService
      */
     private function visibleWhen(array $field, string $fieldKey, string $value): array
     {
-        $field['visible_when'] = [
-            'field' => $fieldKey,
-            'value' => $value,
-        ];
+        $field['visible_when'] = ['field' => $fieldKey, 'value' => $value];
+
+        return $field;
+    }
+
+    /**
+     * @param array<string, mixed> $field
+     * @param list<string> $values
+     * @return array<string, mixed>
+     */
+    private function visibleWhenValues(array $field, string $fieldKey, array $values): array
+    {
+        $field['visible_when'] = ['field' => $fieldKey, 'values' => $values];
 
         return $field;
     }
@@ -319,51 +540,30 @@ class TaxDeclarationSchemaService
      */
     private function requiredWhen(array $field, string $fieldKey, string $value): array
     {
-        $field['required_when'] = [
-            'field' => $fieldKey,
-            'value' => $value,
-        ];
+        $field['required_when'] = ['field' => $fieldKey, 'value' => $value];
 
         return $field;
     }
 
     /**
+     * @param array<string, mixed> $field
+     * @param list<string> $values
      * @return array<string, mixed>
      */
-    private function textarea(string $key, string $label, bool $required = false): array
+    private function requiredWhenValues(array $field, string $fieldKey, array $values): array
     {
-        return [
-            'key' => $key,
-            'label' => $label,
-            'type' => 'textarea',
-            'required' => $required,
-        ];
+        $field['required_when'] = ['field' => $fieldKey, 'values' => $values];
+
+        return $field;
     }
 
     /**
+     * @param array<string, mixed> $section
      * @return array<string, mixed>
      */
-    private function spouseSection(bool $required): array
+    private function visibleWhenSection(array $section, string $fieldKey, string $value): array
     {
-        $section = [
-            'title' => 'Másik jogosult adatai',
-            'note' => $required
-                ? 'Az első házasok kedvezményéhez a házastárs adatai kötelezőek.'
-                : 'Csak akkor töltse, ha a kedvezményt másik jogosulttal közösen érvényesíti.',
-            'fields' => [
-                $this->spouseField($this->text('spouse_name', 'Házastárs vagy élettárs neve', $required), $required, true),
-                $this->spouseField($this->text('spouse_tax_number', 'Házastárs vagy élettárs adóazonosító jele', $required, 'tax_number', '10 számjegy.'), $required, true),
-                $this->spouseField($this->text('spouse_employer_name', 'Másik jogosult munkáltatója', false), $required, false),
-                $this->spouseField($this->text('spouse_employer_tax_number', 'Másik jogosult munkáltatójának adószáma', false, 'company_tax_number', '8 jegyű törzsszám vagy teljes adószám, pl. 12345676-1-42.'), $required, false),
-            ],
-        ];
-
-        if (!$required) {
-            $section['visible_when'] = [
-                'field' => 'claim_scope',
-                'value' => 'shared',
-            ];
-        }
+        $section['visible_when'] = ['field' => $fieldKey, 'value' => $value];
 
         return $section;
     }
@@ -372,23 +572,57 @@ class TaxDeclarationSchemaService
      * @param array<string, mixed> $field
      * @return array<string, mixed>
      */
-    private function spouseField(array $field, bool $alwaysVisible, bool $requiredWhenShared): array
+    private function visibleWhenRow(array $field, string $fieldKey, string $value): array
     {
-        if ($alwaysVisible) {
-            return $field;
-        }
+        $field['visible_when_row'] = ['field' => $fieldKey, 'value' => $value];
 
-        if ($requiredWhenShared) {
-            $field = $this->requiredWhen($field, 'claim_scope', 'shared');
-        }
+        return $field;
+    }
 
-        return $this->visibleWhen($field, 'claim_scope', 'shared');
+    /**
+     * @param array<string, mixed> $field
+     * @return array<string, mixed>
+     */
+    private function requiredWhenRow(array $field, string $fieldKey, string $value): array
+    {
+        $field['required_when_row'] = ['field' => $fieldKey, 'value' => $value];
+
+        return $field;
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function dependentRepeater(int $min, int $max, string $title, string $note = ''): array
+    private function spouseSection(bool $required): array
+    {
+        $section = [
+            'title' => $required ? 'Házastárs adatai' : 'Másik jogosult adatai',
+            'note' => $required
+                ? 'A házastárs neve és adóazonosító jele kötelező. A munkáltatói adatok akkor szükségesek, ha rendelkezésre állnak.'
+                : 'Ezt a részt csak közös érvényesítés esetén kell kitölteni.',
+            'fields' => [
+                $this->text('spouse_name', $required ? 'Házastárs neve' : 'Házastárs vagy élettárs neve', true),
+                $this->text('spouse_tax_number', $required ? 'Házastárs adóazonosító jele' : 'Házastárs vagy élettárs adóazonosító jele', true, 'tax_number', '10 számjegy'),
+                $this->text('spouse_employer_name', 'Másik jogosult munkáltatójának neve'),
+                $this->text('spouse_employer_tax_number', 'Másik jogosult munkáltatójának adószáma', false, 'company_tax_number', '8 jegyű törzsszám vagy teljes adószám'),
+            ],
+        ];
+
+        if (!$required) {
+            $section['visible_when'] = ['field' => 'claim_scope', 'value' => 'shared'];
+            $section['fields'][0]['required_when'] = ['field' => 'claim_scope', 'value' => 'shared'];
+            $section['fields'][1]['required_when'] = ['field' => 'claim_scope', 'value' => 'shared'];
+            $section['fields'][0]['required'] = false;
+            $section['fields'][1]['required'] = false;
+        }
+
+        return $section;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function dependentRepeater(int $min, int $max, string $title, string $note): array
     {
         return [
             'key' => 'dependents',
@@ -396,16 +630,176 @@ class TaxDeclarationSchemaService
             'note' => $note,
             'min' => $min,
             'max' => $max,
-            'add_label' => 'Eltartott hozzáadása',
+            'add_label' => 'Új gyermek vagy eltartott',
+            'row_label' => 'Gyermek vagy eltartott',
+            'columns' => $this->dependentColumns(false),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function combinedDependentRepeater(): array
+    {
+        return [
+            'key' => 'dependents',
+            'title' => 'Gyermekek és eltartottak',
+            'note' => 'A kiválasztott anyakedvezménytől függően legalább 2, 3 vagy 4 adatlap szükséges.',
+            'min' => 0,
+            'max' => 12,
+            'min_by_field' => [
+                'field' => 'mother_discount_type',
+                'values' => ['two' => 2, 'three' => 3, 'four_plus' => 4],
+            ],
+            'qualified_min_by_field' => [
+                'field' => 'mother_discount_type',
+                'values' => ['two' => 2, 'three' => 3, 'four_plus' => 4],
+                'row_field' => 'mother_child_type',
+                'accepted_values' => ['biological', 'adopted'],
+            ],
+            'qualified_min_message' => 'A kiválasztott anyakedvezményhez legalább %d vér szerinti vagy örökbefogadott gyermek adata szükséges. A magzat és a „nem az anyakedvezmény alapja” választás ebbe nem számít bele.',
+            'add_label' => 'Új gyermek vagy eltartott',
+            'row_label' => 'Gyermek vagy eltartott',
+            'columns' => $this->dependentColumns(true),
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function dependentColumns(bool $withMotherChildType): array
+    {
+        $columns = [
+            $this->select('dependent_type', 'Kit rögzít?', [
+                'person' => 'Megszületett gyermek vagy más eltartott',
+                'fetus' => 'Magzat',
+            ], true),
+            $this->visibleWhenRow(
+                $this->requiredWhenRow($this->text('name', 'Név'), 'dependent_type', 'person'),
+                'dependent_type',
+                'person'
+            ),
+        ];
+
+        if ($withMotherChildType) {
+            $columns[] = $this->visibleWhenRow(
+                $this->requiredWhenRow(
+                    $this->select('identification_method', 'Hogyan azonosítja?', [
+                        'tax_number' => 'Adóazonosító jellel',
+                        'birth_data' => 'Születési adatokkal',
+                    ]),
+                    'dependent_type',
+                    'person'
+                ),
+                'dependent_type',
+                'person'
+            );
+            $columns[] = $this->visibleWhenRow(
+                $this->requiredWhenRow($this->text('tax_number', 'Adóazonosító jel', false, 'tax_number', '10 számjegy'), 'identification_method', 'tax_number'),
+                'identification_method',
+                'tax_number'
+            );
+            $columns[] = $this->visibleWhenRow(
+                $this->requiredWhenRow($this->text('birth_place', 'Születési hely'), 'identification_method', 'birth_data'),
+                'identification_method',
+                'birth_data'
+            );
+            $columns[] = $this->visibleWhenRow(
+                $this->requiredWhenRow(
+                    $this->notFuture($this->date('birth_date', 'Születési dátum')),
+                    'identification_method',
+                    'birth_data'
+                ),
+                'identification_method',
+                'birth_data'
+            );
+        } else {
+            $columns[] = $this->visibleWhenRow(
+                $this->requiredWhenRow($this->text('tax_number', 'Adóazonosító jel', false, 'tax_number', '10 számjegy'), 'dependent_type', 'person'),
+                'dependent_type',
+                'person'
+            );
+        }
+
+        $columns[] = $this->visibleWhenRow(
+            $this->requiredWhenRow($this->select('em_code', 'Eltartotti minőség (EM)', $this->dependentQualityOptions()), 'dependent_type', 'person'),
+            'dependent_type',
+            'person'
+        );
+        $columns[] = $this->visibleWhenRow(
+            $this->requiredUnlessRowValues(
+                $this->select('jj_code', 'Jogosultság jogcíme (JJ)', $this->eligibilityTitleOptions(), false, 'EM 0 vagy 2 esetén nem kell kitölteni.'),
+                'em_code',
+                ['0', '2']
+            ),
+            'dependent_type',
+            'person'
+        );
+
+        if ($withMotherChildType) {
+            $columns[] = $this->visibleWhenRow(
+                $this->select('mother_child_type', 'Anyakedvezmény alapja', [
+                    'biological' => 'Vér szerinti gyermek',
+                    'adopted' => 'Örökbefogadott gyermek',
+                    'not_applicable' => 'Nem az anyakedvezmény alapja',
+                ], true),
+                'dependent_type',
+                'person'
+            );
+        } else {
+            $columns[] = $this->date('change_date', 'Változás időpontja', false, 'Csak akkor adja meg, ha a jogosultság év közben változik.');
+        }
+
+        return $columns;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function motherChildrenRepeater(string $title, array $visibleWhen): array
+    {
+        return [
+            'key' => 'children',
+            'title' => $title,
+            'note' => 'Ha a gyermeknek nincs adóazonosító jele, válassza a születési adatokkal történő azonosítást.',
+            'min' => 0,
+            'max' => 12,
+            'visible_when' => $visibleWhen,
+            'min_by_field' => [
+                'field' => 'mother_discount_type',
+                'values' => ['two' => 2, 'three' => 3, 'four_plus' => 4],
+            ],
+            'add_label' => 'Új gyermek',
+            'row_label' => 'Gyermek',
             'columns' => [
-                $this->text('tax_number', 'Adóazonosító jel vagy magzat', true, 'tax_number_or_fetus', 'Magzat esetén írja be: magzat. Egyébként 10 számjegy.'),
-                $this->text('name', 'Név', true),
-                $this->date('change_date', 'Változás időpontja', false),
-                $this->select('em_code', 'EM* kód', $this->dependentQualityOptions(), true, 'Eltartotti minőség kódja.'),
-                $this->requiredUnlessRowValues(
-                    $this->select('jj_code', 'JJ** jogcím', $this->eligibilityTitleOptions(), false, 'EM 0 vagy 2 esetén nem kell kitölteni. Egyéb EM kódnál kötelező.'),
-                    'em_code',
-                    ['0', '2']
+                $this->text('name', 'Gyermek neve', true),
+                $this->select('identification_method', 'Hogyan azonosítja a gyermeket?', [
+                    'tax_number' => 'Adóazonosító jellel',
+                    'birth_data' => 'Születési adatokkal',
+                ], true),
+                $this->visibleWhenRow(
+                    $this->requiredWhenRow($this->text('tax_number', 'Adóazonosító jel', false, 'tax_number', '10 számjegy'), 'identification_method', 'tax_number'),
+                    'identification_method',
+                    'tax_number'
+                ),
+                $this->visibleWhenRow(
+                    $this->requiredWhenRow(
+                        $this->notFuture($this->date('birth_date', 'Születési dátum')),
+                        'identification_method',
+                        'birth_data'
+                    ),
+                    'identification_method',
+                    'birth_data'
+                ),
+                $this->visibleWhenRow(
+                    $this->requiredWhenRow($this->text('birth_place', 'Születési hely'), 'identification_method', 'birth_data'),
+                    'identification_method',
+                    'birth_data'
+                ),
+                $this->visibleWhenRow(
+                    $this->requiredWhenRow($this->text('mother_name', 'Gyermek anyjának születési neve'), 'identification_method', 'birth_data'),
+                    'identification_method',
+                    'birth_data'
                 ),
             ],
         ];
@@ -418,32 +812,20 @@ class TaxDeclarationSchemaService
      */
     private function requiredUnlessRowValues(array $field, string $fieldKey, array $values): array
     {
-        $field['required_unless_row_values'] = [
-            'field' => $fieldKey,
-            'values' => $values,
-        ];
+        $field['required_unless_row_values'] = ['field' => $fieldKey, 'values' => $values];
 
         return $field;
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<string, string>
      */
-    private function childRepeater(int $min, int $max, string $title): array
+    private function motherDiscountOptions(): array
     {
         return [
-            'key' => 'children',
-            'title' => $title,
-            'note' => 'Ha több gyermek szerepel a nyilatkozaton, adjon hozzá további sort.',
-            'min' => $min,
-            'max' => $max,
-            'add_label' => 'Gyermek hozzáadása',
-            'columns' => [
-                $this->text('name', 'Gyermek neve', true),
-                $this->text('tax_number', 'Gyermek adóazonosító jele', true, 'tax_number'),
-                $this->date('birth_date', 'Születési dátum', false),
-                $this->text('birth_place', 'Születési hely', false),
-            ],
+            'two' => 'Két gyermeket nevelő anyák kedvezménye',
+            'three' => 'Három gyermeket nevelő anyák kedvezménye',
+            'four_plus' => 'Négy vagy több gyermeket nevelő anyák kedvezménye',
         ];
     }
 
@@ -458,7 +840,7 @@ class TaxDeclarationSchemaService
             '3' => '3 - Felváltva gondozott gyermek',
             '4' => '4 - Tartósan beteg vagy súlyosan fogyatékos személy',
             '5' => '5 - Felváltva gondozott tartósan beteg vagy súlyosan fogyatékos személy',
-            '0' => '0 - Kedvezménybe nem számító',
+            '0' => '0 - A kedvezménybe nem számító személy',
         ];
     }
 

@@ -20,13 +20,13 @@
 <div class="page">
     <header class="topbar">
         <div class="topbar-inner">
-            <a href="#" class="brand" aria-label="Miell Group nyilatkozatok">
-                <img src="/assets/declarations/img/logo.svg" alt="Miell Group" class="brand-logo-img">
+            <div class="brand" aria-label="Miell Group nyilatkozatok">
+                <img src="<?= base_url('assets/declarations/img/logo.svg') ?>" alt="Miell Group" class="brand-logo-img">
                 <span class="brand-copy">
                     <span class="brand-name">Miell Group nyilatkozatok</span>
                     <span class="brand-subtitle">Online kitöltés és beküldés</span>
                 </span>
-            </a>
+            </div>
 
             <div class="security-pill">
                 <span class="security-mark" aria-hidden="true"></span>
@@ -54,7 +54,7 @@
     </main>
 
     <footer class="footer">
-        © <?= date('Y') ?> Miell Group · A hozzáférés a meghívó link lejáratáig él.
+        © <?= date('Y') ?> Miell Group · A hozzáférés a meghívó link lejáratáig vagy a folyamat lezárásáig él.
     </footer>
 </div>
 
@@ -127,7 +127,18 @@
                 sum += Number(value.charAt(i)) * (i + 1);
             }
 
-            return sum % 11 === Number(value.charAt(9));
+            if (sum % 11 !== Number(value.charAt(9))) {
+                return false;
+            }
+
+            var daysSinceEpoch = Number(value.slice(1, 6));
+            var encodedBirthDate = new Date(Date.UTC(1867, 0, 1));
+            encodedBirthDate.setUTCDate(encodedBirthDate.getUTCDate() + daysSinceEpoch);
+
+            var today = new Date();
+            var todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+
+            return encodedBirthDate.getTime() <= todayUtc;
         }
 
         function isValidCvdBlock(value) {
@@ -266,6 +277,10 @@
                     return label + ' formátuma hibás.';
                 }
 
+                if (rule === 'month' && !isEmpty(input) && !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) {
+                    return label + ' formátuma hibás.';
+                }
+
                 if (rule === 'not_future' && !isEmpty(input)) {
                     var today = new Date();
                     today.setHours(0, 0, 0, 0);
@@ -285,7 +300,15 @@
                     }
 
                     if (!isValidTaxNumber(cleanDigits)) {
-                        return 'Az adóazonosító jel ellenőrző száma hibás.';
+                        return 'Az adóazonosító jel hibás vagy nem érvényes.';
+                    }
+                }
+
+                if (rule.indexOf('min_value:') === 0 && !isEmpty(input)) {
+                    var minValue = Number(rule.split(':')[1] || 0);
+
+                    if (Number(value) < minValue) {
+                        return label + ' értéke legalább ' + minValue + ' legyen.';
                     }
                 }
 
@@ -309,7 +332,7 @@
                     }
 
                     if (!isValidTaxNumber(cleanDigits)) {
-                        return 'Az adóazonosító jel ellenőrző száma hibás.';
+                        return 'Az adóazonosító jel hibás vagy nem érvényes.';
                     }
                 }
 
@@ -379,7 +402,7 @@
         }
 
         function formFields(form) {
-            return Array.prototype.slice.call(form.querySelectorAll('[data-validate]'));
+            return Array.prototype.slice.call(form.querySelectorAll('[data-validate]:not(:disabled)'));
         }
 
         function updateProgress(form, results) {
@@ -389,8 +412,11 @@
                 return;
             }
 
-            var total = results.length;
-            var valid = results.filter(function (result) {
+            var requiredResults = results.filter(function (result) {
+                return result.input.required;
+            });
+            var total = requiredResults.length;
+            var valid = requiredResults.filter(function (result) {
                 return result.message === '';
             }).length;
             var percent = total > 0 ? Math.round((valid / total) * 100) : 0;
@@ -402,7 +428,7 @@
             }
 
             if (label) {
-                label.textContent = valid + '/' + total + ' mező rendben';
+                label.textContent = valid + '/' + total + ' kötelező mező kész';
             }
         }
 

@@ -15,12 +15,7 @@ $routes->group('declarations', [
     $routes->get('persons/(:num)', 'PersonsController::show/$1');
     $routes->get('persons/(:num)/audit', 'AuditController::person/$1');
     $routes->get('persons/(:num)/json', 'PersonsController::json/$1');
-    $routes->post('persons/(:num)/intranet/link', 'PersonsController::linkIntranetUser/$1');
-    $routes->post('persons/(:num)/intranet/user-add', 'PersonsController::prepareIntranetUserAdd/$1');
-    $routes->post('persons/(:num)/relations/create', 'PersonsController::createRelation/$1');
-    $routes->post('persons/(:num)/relations/(:num)/close', 'PersonsController::closeRelation/$1/$2');
-    $routes->post('persons/(:num)/relations/(:num)/reopen', 'PersonsController::reopenRelation/$1/$2');
-    $routes->post('persons/(:num)/relations/(:num)/packets/create', 'PersonsController::createPacket/$1/$2');
+    $routes->post('persons/(:num)/packets/create', 'PersonsController::createPacketForPerson/$1');
     $routes->get('packets/(:num)', 'PacketsController::show/$1');
     $routes->get('packets/(:num)/audit', 'AuditController::packet/$1');
     $routes->post('packets/(:num)/items/add', 'PacketsController::addItem/$1');
@@ -57,4 +52,6 @@ $routes->group('declarations/my-declarations', [
     $routes->get('', 'MyDeclarationsController::index');
     $routes->get('/', 'MyDeclarationsController::index');
     $routes->post('start', 'MyDeclarationsController::start');
+    $routes->get('(:num)/items/(:num)/preview', 'MyDeclarationsController::previewItemDocument/$1/$2');
+    $routes->get('(:num)', 'MyDeclarationsController::show/$1');
 });

@@ -3,6 +3,7 @@
 namespace App\Modules\Declarations\Services\Public;
 
 use App\Modules\Declarations\Entities\DeclarationInvitation;
+use App\Modules\Declarations\Entities\DeclarationPacket;
 use App\Modules\Declarations\Models\DeclarationInvitationModel;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\PersonModel;
@@ -40,6 +41,13 @@ class InvitationContextService
             return null;
         }
 
+        if (in_array((string) $packet->status, [
+            DeclarationPacket::STATUS_CLOSED,
+            DeclarationPacket::STATUS_CANCELLED,
+        ], true)) {
+            return null;
+        }
+
         $person = $this->personModel->find((int) $packet->person_id);
 
         return new InvitationContext($token, $invitation, $packet, $person ?: null);
@@ -62,7 +70,7 @@ class InvitationContextService
             }
 
             if ((string) $invitation->status === DeclarationInvitation::STATUS_REVOKED) {
-                throw new \RuntimeException('Ez a meghívó link már nem használható, mert új link került kiküldésre. Kérjük, a legutóbb kapott e-mailben található linket nyissa meg.');
+                throw new \RuntimeException('Ez a meghívó link már nem használható. A folyamat lezárulhatott, vagy új link került kiküldésre.');
             }
 
             if ((string) $invitation->status === DeclarationInvitation::STATUS_COMPLETED) {
@@ -71,6 +79,17 @@ class InvitationContextService
 
             if ((string) $invitation->status === DeclarationInvitation::STATUS_CANCELLED) {
                 throw new \RuntimeException('Ez a meghívó link már nem használható. Kérjük, kérjen új nyilatkozatkitöltő linket.');
+            }
+
+            $packet = !empty($invitation->packet_id)
+                ? $this->packetModel->find((int) $invitation->packet_id)
+                : null;
+
+            if ($packet && in_array((string) $packet->status, [
+                DeclarationPacket::STATUS_CLOSED,
+                DeclarationPacket::STATUS_CANCELLED,
+            ], true)) {
+                throw new \RuntimeException('Ez a meghívó link már nem használható, mert a nyilatkozatcsomagot munkaügyileg lezárták.');
             }
         }
 

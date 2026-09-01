@@ -26,12 +26,11 @@ class StructuredStatementSchemaService
             'child_extra_leave_statement' => [
                 'eyebrow' => 'Munkaügy',
                 'title' => 'Gyermek után járó pótszabadság',
-                'intro' => 'A gyermek után járó pótszabadság igényléséhez adja meg, kéri-e a pótszabadság figyelembevételét.',
+                'intro' => 'Jelezze, hogy kéri-e a gyermek után járó pótszabadságot. Ha nem kéri, gyermekadatokat sem kell megadnia.',
                 'helper_title' => 'Igen válasz esetén',
                 'helper_items' => [
-                    'legalább egy gyermek adata szükséges',
-                    'a gyermek neve és születési dátuma kötelező',
-                    'a megjegyzésben rögzíthető minden speciális körülmény',
+                    'legalább egy gyermek nevét és születési dátumát adja meg',
+                    'különleges körülményt a megjegyzésben jelezhet',
                 ],
                 'sections' => [
                     [
@@ -58,13 +57,17 @@ class StructuredStatementSchemaService
                         [
                             $this->text('child_name', 'Gyermek neve', true),
                             $this->date('birth_date', 'Születési dátum', true),
-                            $this->text('tax_number', 'Adóazonosító jel', false, 'tax_number', 'Ha már ismert, 10 számjeggyel adja meg.'),
-                            $this->select('custody_type', 'Jogosultság alapja', [
+                            $this->select('custody_type', 'Hogyan neveli a gyermeket?', [
                                 'own_household' => 'Saját háztartásban nevelt gyermek',
                                 'shared_custody' => 'Felváltva gondozott gyermek',
-                                'disabled' => 'Fogyatékossággal élő gyermek',
-                                'other' => 'Egyéb jogosultsági ok',
+                                'other' => 'Más élethelyzet',
                             ], true),
+                            $this->checkbox(
+                                'disabled_child',
+                                'A gyermek után emelt összegű családi pótlék jár',
+                                false,
+                                'Ezt akkor jelölje, ha a gyermek tartósan beteg vagy súlyosan fogyatékos, és emiatt emelt összegű családi pótlék jár utána.'
+                            ),
                         ],
                         'Igen válasz esetén legalább egy gyermeket adjon meg.',
                         0,
@@ -73,6 +76,62 @@ class StructuredStatementSchemaService
                         ['field' => 'claim_extra_leave', 'value' => 'yes', 'min' => 1]
                     ),
                 ],
+            ],
+            'under_3_child_work_schedule_statement' => [
+                'eyebrow' => 'Munkaügy',
+                'title' => 'Nyilatkozat 3 év alatti gyermek neveléséről',
+                'intro' => 'Ezzel a nyilatkozattal jelzi, hogy nevel-e 3 év alatti gyermeket, és szükséges-e emiatt külön szabályokat figyelembe venni a munkaidő beosztásánál.',
+                'helper_title' => 'Mit jelent ez?',
+                'helper_items' => [
+                    'kisgyermeket nevelő vagy gyermekét egyedül nevelő munkavállalónál egyes beosztások korlátozottak lehetnek',
+                    'ilyen lehet például a túlóra, a készenlét vagy az éjszakai munka',
+                    'a megadott adatok alapján a munkaügy állapítja meg a pontos szabályokat',
+                ],
+                'sections' => [
+                    [
+                        'title' => 'Gyermek nevelésére vonatkozó nyilatkozat',
+                        'note' => 'A nyilatkozat a kitöltés napján fennálló állapotot rögzíti.',
+                        'fields' => [
+                            $this->select('raises_child_under_3', 'Nevel 3 év alatti gyermeket?', [
+                                'no' => 'Nem nevelek 3 év alatti gyermeket',
+                                'yes' => 'Nevelek 3 év alatti gyermeket',
+                            ], true),
+                            $this->visibleWhen(
+                                $this->select('child_lives_same_household', 'A gyermek Önnel közös háztartásban él?', [
+                                    'yes' => 'Igen',
+                                    'no' => 'Nem',
+                                ], true),
+                                'raises_child_under_3',
+                                'yes'
+                            ),
+                            $this->visibleWhen(
+                                $this->select('raises_child_alone', 'Egyedül neveli a gyermeket?', [
+                                    'no' => 'Nem, gyermekemet nem egyedül nevelem',
+                                    'yes' => 'Igen, gyermekemet egyedül nevelem',
+                                ], true),
+                                'raises_child_under_3',
+                                'yes'
+                            ),
+                        ],
+                    ],
+                    [
+                        'title' => 'Munkaidő-beosztás',
+                        'note' => 'Bizonyos élethelyzetekben a munkáltató nem rendelhet el, vagy csak az Ön hozzájárulásával rendelhet el éjszakai munkát, túlórát, készenlétet vagy egyenlőtlen munkaidő-beosztást.',
+                        'visible_when' => ['field' => 'raises_child_under_3', 'value' => 'yes'],
+                        'fields' => [
+                            $this->select('mt_113_condition_exists', 'Fennáll Önnél olyan körülmény, amely miatt külön munkaidő-beosztási szabályokat kell alkalmazni?', [
+                                'yes' => 'Igen, fennáll',
+                                'no' => 'Nem áll fenn',
+                            ], true),
+                            $this->checkbox(
+                                'change_reporting_acknowledged',
+                                'Tudomásul veszem, hogy a nyilatkozatot befolyásoló változást haladéktalanul, de legkésőbb a változást követő 3 munkanapon belül írásban be kell jelentenem a munkáltatónak.',
+                                true
+                            ),
+                        ],
+                    ],
+                ],
+                'repeaters' => [],
             ],
         ];
     }
@@ -125,6 +184,20 @@ class StructuredStatementSchemaService
     /**
      * @return array<string, mixed>
      */
+    private function checkbox(string $key, string $label, bool $required = false, string $help = ''): array
+    {
+        return [
+            'key' => $key,
+            'label' => $label,
+            'type' => 'checkbox',
+            'required' => $required,
+            'help' => $help,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function date(string $key, string $label, bool $required = false, string $help = ''): array
     {
         return [
@@ -133,6 +206,7 @@ class StructuredStatementSchemaService
             'type' => 'date',
             'required' => $required,
             'help' => $help,
+            'not_future' => true,
         ];
     }
 
@@ -160,6 +234,7 @@ class StructuredStatementSchemaService
             'min' => $min,
             'max' => $max,
             'add_label' => $addLabel,
+            'row_label' => $key === 'children' ? 'gyermek' : 'adatlap',
             'columns' => $columns,
         ];
 

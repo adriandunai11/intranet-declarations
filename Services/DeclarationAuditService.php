@@ -29,7 +29,6 @@ class DeclarationAuditService
             'entity_id' => $entityId,
 
             'person_id' => $context['person_id'] ?? null,
-            'employment_relation_id' => $context['employment_relation_id'] ?? null,
             'packet_id' => $context['packet_id'] ?? null,
             'packet_item_id' => $context['packet_item_id'] ?? null,
             'submission_id' => $context['submission_id'] ?? null,

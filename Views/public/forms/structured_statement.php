@@ -10,6 +10,21 @@ if ($submission && !empty($submission->data_json)) {
     $data = $submissionDataNormalizer->normalize($submission->data_json);
 }
 
+$templateCode = (string) ($item->template_code ?? '');
+$storedRepeaters = is_array($data['repeaters'] ?? null) ? $data['repeaters'] : [];
+
+if ($templateCode === 'child_extra_leave_statement') {
+    foreach (($storedRepeaters['children'] ?? []) as $index => $row) {
+        if (!is_array($row) || ($row['custody_type'] ?? '') !== 'disabled') {
+            continue;
+        }
+
+        $storedRepeaters['children'][$index]['custody_type'] = 'own_household';
+        $storedRepeaters['children'][$index]['disabled_child'] = 1;
+    }
+}
+
+$data['repeaters'] = $storedRepeaters;
 $schema = is_array($statementFormSchema ?? null) ? $statementFormSchema : [];
 $fieldData = is_array($data['statement_fields'] ?? null) ? $data['statement_fields'] : [];
 $repeaterData = is_array($data['repeaters'] ?? null) ? $data['repeaters'] : [];
@@ -36,6 +51,10 @@ $rulesForField = static function (array $field): string {
 
     if (($field['type'] ?? '') === 'date') {
         $rules[] = 'date';
+    }
+
+    if (!empty($field['not_future'])) {
+        $rules[] = 'not_future';
     }
 
     if (($field['validation'] ?? '') === 'tax_number') {
@@ -151,12 +170,16 @@ $renderField = static function (array $field, string $name, string $id, $value) 
         $inputType = $type === 'date' ? 'date' : 'text';
         $formatAttributes = '';
 
+        if ($type === 'date' && !empty($field['not_future'])) {
+            $formatAttributes .= ' max="' . esc(date('Y-m-d')) . '"';
+        }
+
         if (($field['validation'] ?? '') === 'tax_number') {
-            $formatAttributes = ' inputmode="numeric" maxlength="10" data-format="digits" data-max-digits="10" placeholder="10 számjegy"';
+            $formatAttributes .= ' inputmode="numeric" maxlength="10" data-format="digits" data-max-digits="10" placeholder="10 számjegy"';
         } elseif (($field['validation'] ?? '') === 'taj_number') {
-            $formatAttributes = ' inputmode="numeric" maxlength="11" data-format="taj" placeholder="123 456 789"';
+            $formatAttributes .= ' inputmode="numeric" maxlength="11" data-format="taj" placeholder="123 456 789"';
         } elseif ($type === 'number') {
-            $formatAttributes = ' inputmode="numeric" data-format="digits"';
+            $formatAttributes .= ' inputmode="numeric" data-format="digits"';
         }
 
         $html .= '<input type="' . esc($inputType) . '" id="' . esc($id) . '" name="' . esc($name) . '" value="' . esc((string) $value) . '"'
@@ -179,9 +202,10 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
     $repeaterKey = (string) ($repeater['key'] ?? 'rows');
     $rowIndex = (string) $index;
     $rowNumber = is_numeric($index) ? ((int) $index + 1) : '__ROW__';
+    $rowLabel = (string) ($repeater['row_label'] ?? 'adatlap');
     $html = '<div class="tax-repeater-row" data-repeater-row data-row-index="' . esc($rowIndex) . '">';
     $html .= '<div class="tax-repeater-row-head">';
-    $html .= '<strong><span data-row-number>' . esc((string) $rowNumber) . '</span>. sor</strong>';
+    $html .= '<strong><span data-row-number>' . esc((string) $rowNumber) . '</span>. ' . esc($rowLabel) . '</strong>';
     $html .= '<button type="button" class="btn btn-secondary btn-sm" data-remove-repeater-row>Eltávolítás</button>';
     $html .= '</div>';
     $html .= '<div class="tax-repeater-grid structured-repeater-grid">';
@@ -207,7 +231,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 <div class="form-layout tax-form-layout structured-form-layout">
     <aside class="form-context-panel">
         <div class="eyebrow"><?= esc($schema['eyebrow'] ?? 'Nyilatkozat') ?></div>
-        <h1><?= esc($item->template_name ?? ($schema['title'] ?? 'Nyilatkozat')) ?></h1>
+        <h1><?= esc($schema['title'] ?? ($item->template_name ?? 'Nyilatkozat')) ?></h1>
         <p><?= esc($schema['intro'] ?? 'A nyilatkozat online kitöltése és mentése.') ?></p>
 
         <?php if ($person): ?>
@@ -259,7 +283,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                 <div class="form-progress" data-form-progress>
                     <div class="form-progress-head">
                         <span>Mezők ellenőrzése</span>
-                        <span data-progress-label>0/0 mező rendben</span>
+                        <span data-progress-label>0/0 kötelező mező kész</span>
                     </div>
                     <div class="progress-rail">
                         <span class="progress-fill" data-progress-fill></span>
@@ -316,14 +340,14 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                     <section class="form-section tax-repeater" data-repeater="<?= esc($repeaterKey) ?>" data-min="<?= esc((string) $minRows) ?>" data-max="<?= esc((string) $maxRows) ?>"<?= $sectionAttributes($repeater) ?><?= $repeaterRequiredAttributes($repeater) ?>>
                         <div class="tax-repeater-title-row">
                             <div class="section-copy">
-                                <h2 class="form-section-title"><?= esc($repeater['title'] ?? 'Sorok') ?></h2>
+                                <h2 class="form-section-title"><?= esc($repeater['title'] ?? 'Adatok') ?></h2>
                                 <?php if (!empty($repeater['note'])): ?>
                                     <p class="section-note"><?= esc((string) $repeater['note']) ?></p>
                                 <?php endif; ?>
                             </div>
 
                             <button type="button" class="btn btn-secondary btn-sm" data-add-repeater-row>
-                                <?= esc($repeater['add_label'] ?? 'Sor hozzáadása') ?>
+                                <?= esc($repeater['add_label'] ?? 'Új adatlap') ?>
                             </button>
                         </div>
 
@@ -378,7 +402,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 
         function updateRepeater(section) {
             var rows = rowsFor(section);
-            var min = Number(section.dataset.min || 0);
+            var min = Number(section.dataset.currentMin || section.dataset.min || 0);
             var max = Number(section.dataset.max || 20);
             var addButton = section.querySelector('[data-add-repeater-row]');
 
@@ -398,6 +422,25 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             if (addButton) {
                 addButton.disabled = rows.length >= max;
             }
+        }
+
+        function appendRepeaterRow(section) {
+            var rowsContainer = section.querySelector('[data-repeater-rows]');
+            var template = section.querySelector('template[data-repeater-template]');
+            var max = Number(section.dataset.max || 20);
+
+            if (!rowsContainer || !template || rowsFor(section).length >= max) {
+                return false;
+            }
+
+            var index = nextIndex(section);
+            var html = template.innerHTML
+                .replace(/__INDEX__/g, String(index))
+                .replace(/__ROW__/g, String(rowsFor(section).length + 1));
+
+            rowsContainer.insertAdjacentHTML('beforeend', html);
+
+            return true;
         }
 
         function refreshValidation(form) {
@@ -530,6 +573,25 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                 section.hidden = !conditionMatches(form, section, 'visible');
             });
 
+            Array.prototype.slice.call(form.querySelectorAll('[data-repeater]')).forEach(function (section) {
+                var visible = !section.hidden;
+                var required = visible && section.dataset.requiredWhenField
+                    && conditionMatches(form, section, 'required');
+                var minimum = required
+                    ? Number(section.dataset.requiredMin || 1)
+                    : Number(section.dataset.min || 0);
+
+                section.dataset.currentMin = String(minimum);
+
+                while (visible && rowsFor(section).length < minimum) {
+                    if (!appendRepeaterRow(section)) {
+                        break;
+                    }
+                }
+
+                updateRepeater(section);
+            });
+
             Array.prototype.slice.call(form.querySelectorAll('[data-base-validate]')).forEach(function (input) {
                 applyConditionalInput(form, input);
             });
@@ -565,7 +627,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 
                     if (rowsFor(section).length < minimum) {
                         var title = section.querySelector('.form-section-title');
-                        errors.push((title ? title.textContent.trim() : 'A soros rész') + ': legalább ' + minimum + ' sort meg kell adni.');
+                        errors.push((title ? title.textContent.trim() : 'Ez a rész') + ': legalább ' + minimum + ' adatlapot meg kell adni.');
                     }
                 });
 
@@ -605,18 +667,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 
                 if (addButton && rowsContainer && template) {
                     addButton.addEventListener('click', function () {
-                        var max = Number(section.dataset.max || 20);
-
-                        if (rowsFor(section).length >= max) {
-                            return;
-                        }
-
-                        var index = nextIndex(section);
-                        var html = template.innerHTML
-                            .replace(/__INDEX__/g, String(index))
-                            .replace(/__ROW__/g, String(rowsFor(section).length + 1));
-
-                        rowsContainer.insertAdjacentHTML('beforeend', html);
+                        appendRepeaterRow(section);
                         updateRepeater(section);
 
                         var form = section.closest('form');
@@ -638,7 +689,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                 var section = button.closest('[data-repeater]');
                 var row = button.closest('[data-repeater-row]');
 
-                if (!section || !row || rowsFor(section).length <= Number(section.dataset.min || 0)) {
+                if (!section || !row || rowsFor(section).length <= Number(section.dataset.currentMin || section.dataset.min || 0)) {
                     return;
                 }
 

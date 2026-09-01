@@ -67,7 +67,7 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                 <div class="form-progress" data-form-progress>
                     <div class="form-progress-head">
                         <span>Mezők ellenőrzése</span>
-                        <span data-progress-label>0/0 mező rendben</span>
+                        <span data-progress-label>0/0 kötelező mező kész</span>
                     </div>
                     <div class="progress-rail">
                         <span class="progress-fill" data-progress-fill></span>
@@ -82,26 +82,6 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                         <p class="section-note">Olyan bankszámlaszámot adjon meg, amelyre a munkabér utalható.</p>
                     </div>
 
-                    <div class="form-grid form-grid-2">
-                        <div class="form-group">
-                            <label for="account_holder">Számlatulajdonos neve</label>
-                            <input type="text" id="account_holder" name="account_holder"
-                                value="<?= esc(old('account_holder', $data['account_holder'] ?? ($person ? $person->fullName() : ''))) ?>"
-                                autocomplete="name" data-validate="required|min:3" data-label="Számlatulajdonos neve" required>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="bank_name">Bank neve</label>
-                            <input type="text" id="bank_name" name="bank_name"
-                                value="<?= esc(old('bank_name', $data['bank_name'] ?? '')) ?>"
-                                autocomplete="organization"
-                                data-validate="bank_name_required_when_unknown|min:2"
-                                data-bank-account-source="#bank_account_number"
-                                data-label="Bank neve">
-                            <div class="form-help">Ha a bankszámlaszám első 3 számjegye alapján felismerhető, automatikusan kitöltjük.</div>
-                        </div>
-                    </div>
-
                     <div class="form-group">
                         <label for="bank_account_number">Bankszámlaszám</label>
                         <input type="text" id="bank_account_number" name="bank_account_number"
@@ -110,6 +90,26 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                             data-format="bank_account" data-bank-name-target="#bank_name" data-bank-hint="#bank_account_bank_hint"
                             data-validate="required|bank_account" data-label="Bankszámlaszám" required>
                         <div class="form-help" id="bank_account_bank_hint">16 vagy 24 számjegy. A mező automatikusan tagolja a számot.</div>
+                    </div>
+
+                    <div class="form-grid form-grid-2">
+                        <div class="form-group">
+                            <label for="bank_name">Bank neve</label>
+                            <input type="text" id="bank_name" name="bank_name"
+                                value="<?= esc(old('bank_name', $data['bank_name'] ?? '')) ?>"
+                                autocomplete="organization"
+                                data-validate="bank_name_required_when_unknown|min:2"
+                                data-bank-account-source="#bank_account_number"
+                                data-label="Bank neve">
+                            <div class="form-help">A bankszámlaszám alapján automatikusan kitöltjük. Ha nem ismerhető fel, írja be a bank nevét.</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="account_holder">Számlatulajdonos neve</label>
+                            <input type="text" id="account_holder" name="account_holder"
+                                value="<?= esc(old('account_holder', $data['account_holder'] ?? ($person ? $person->fullName() : ''))) ?>"
+                                autocomplete="name" data-validate="required|min:3" data-label="Számlatulajdonos neve" required>
+                        </div>
                     </div>
                 </section>
 

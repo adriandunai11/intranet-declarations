@@ -31,8 +31,8 @@ class PersonTablePresenter
 
         $buttons[] = '<a href="' . url('declarations/persons/' . $personId) . '"'
             . ' class="btn btn-sm btn-default"'
-            . ' title="Megnyitás"'
-            . ' aria-label="Megnyitás">'
+            . ' title="Megnyitás és csomagindítás"'
+            . ' aria-label="Megnyitás és csomagindítás">'
             . '<i class="fas fa-eye"></i>'
             . '</a>';
 

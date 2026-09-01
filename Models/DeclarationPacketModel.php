@@ -3,9 +3,7 @@
 namespace App\Modules\Declarations\Models;
 
 use App\Modules\Declarations\Entities\DeclarationPacket;
-use App\Modules\Declarations\Entities\EmploymentRelation;
 use CodeIgniter\Model;
-
 
 class DeclarationPacketModel extends Model
 {
@@ -19,11 +17,12 @@ class DeclarationPacketModel extends Model
 
     protected $allowedFields = [
         'person_id',
-        'employment_relation_id',
         'company_id',
+        'primary_recruiter_user_id',
         'status',
         'flow_type',
         'tax_year',
+        'process_date',
         'created_by_user_id',
         'sent_at',
         'completed_at',
@@ -32,11 +31,12 @@ class DeclarationPacketModel extends Model
 
     protected $validationRules = [
         'person_id' => 'required|is_natural_no_zero',
-        'employment_relation_id' => 'required|is_natural_no_zero',
         'company_id' => 'required|is_natural_no_zero',
+        'primary_recruiter_user_id' => 'permit_empty|is_natural_no_zero',
         'status' => 'required|max_length[30]',
         'flow_type' => 'permit_empty|max_length[50]',
         'tax_year' => 'permit_empty|integer',
+        'process_date' => 'permit_empty|valid_date[Y-m-d]',
     ];
 
     public function findByPersonId(int $personId): array
@@ -46,39 +46,25 @@ class DeclarationPacketModel extends Model
             ->findAll();
     }
 
-    public function findOpenBlockingByPersonCompanyForOpenRelations(
-        int $personId,
-        int $companyId,
-        ?int $excludePacketId = null
-    ) {
+    public function findOpenBlockingByPerson(int $personId, ?int $excludePacketId = null)
+    {
         $builder = $this
-            ->select('declaration_packets.*')
-            ->join(
-                'declaration_employment_relations',
-                'declaration_employment_relations.id = declaration_packets.employment_relation_id',
-                'inner'
-            )
-            ->where('declaration_packets.person_id', $personId)
-            ->where('declaration_packets.company_id', $companyId)
-            ->whereIn('declaration_packets.status', [
+            ->where('person_id', $personId)
+            ->whereIn('status', [
                 DeclarationPacket::STATUS_DRAFT,
                 DeclarationPacket::STATUS_SENT,
                 DeclarationPacket::STATUS_IN_PROGRESS,
                 DeclarationPacket::STATUS_SUBMITTED,
                 DeclarationPacket::STATUS_APPROVED,
                 DeclarationPacket::STATUS_COMPLETED,
-            ])
-            ->whereNotIn('declaration_employment_relations.status', [
-                EmploymentRelation::STATUS_CLOSED,
-                EmploymentRelation::STATUS_CANCELLED,
             ]);
 
         if ($excludePacketId !== null) {
-            $builder->where('declaration_packets.id !=', $excludePacketId);
+            $builder->where('id !=', $excludePacketId);
         }
 
         return $builder
-            ->orderBy('declaration_packets.id', 'DESC')
+            ->orderBy('id', 'DESC')
             ->first();
     }
 
@@ -94,6 +80,7 @@ class DeclarationPacketModel extends Model
     {
         return $this->update($packetId, [
             'status' => DeclarationPacket::STATUS_IN_PROGRESS,
+            'completed_at' => null,
         ]);
     }
 
@@ -101,6 +88,7 @@ class DeclarationPacketModel extends Model
     {
         return $this->update($packetId, [
             'status' => DeclarationPacket::STATUS_SUBMITTED,
+            'completed_at' => null,
         ]);
     }
 
@@ -108,7 +96,6 @@ class DeclarationPacketModel extends Model
     {
         return $this->update($packetId, [
             'status' => DeclarationPacket::STATUS_APPROVED,
-            'completed_at' => date('Y-m-d H:i:s'),
         ]);
     }
 

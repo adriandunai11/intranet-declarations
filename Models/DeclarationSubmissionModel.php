@@ -20,7 +20,6 @@ class DeclarationSubmissionModel extends Model
         'packet_item_id',
         'template_id',
         'person_id',
-        'employment_relation_id',
         'status',
         'submitter_type',
         'submitter_user_id',
@@ -41,7 +40,6 @@ class DeclarationSubmissionModel extends Model
         'packet_item_id' => 'required|is_natural_no_zero',
         'template_id' => 'required|is_natural_no_zero',
         'person_id' => 'required|is_natural_no_zero',
-        'employment_relation_id' => 'required|is_natural_no_zero',
         'status' => 'required|max_length[30]',
     ];
 

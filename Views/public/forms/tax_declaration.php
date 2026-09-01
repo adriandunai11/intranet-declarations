@@ -11,6 +11,98 @@ if ($submission && !empty($submission->data_json)) {
     $data = $submissionDataNormalizer->normalize($rawData);
 }
 
+$templateCode = (string) ($item->template_code ?? '');
+$storedFields = is_array($data['tax_fields'] ?? null) ? $data['tax_fields'] : [];
+$storedRepeaters = is_array($data['repeaters'] ?? null) ? $data['repeaters'] : [];
+
+if ($templateCode === 'under_30_mothers_discount' && empty($storedFields['eligibility_basis'])) {
+    $legacyChild = is_array($storedRepeaters['children'][0] ?? null) ? $storedRepeaters['children'][0] : [];
+
+    if (!empty($legacyChild)) {
+        $storedFields['eligibility_basis'] = 'child';
+        $storedFields['child_name'] = (string) ($legacyChild['name'] ?? '');
+        $storedFields['child_tax_number'] = (string) ($legacyChild['tax_number'] ?? '');
+        $storedFields['declaration_action'] = 'claim';
+    }
+}
+
+if (in_array($templateCode, ['family_tax_discount', 'combined_family_mothers_discount'], true)) {
+    foreach (($storedRepeaters['dependents'] ?? []) as $index => $row) {
+        if (!is_array($row) || !empty($row['dependent_type'])) {
+            continue;
+        }
+
+        $isFetus = strtolower(trim((string) ($row['tax_number'] ?? $row['name'] ?? ''))) === 'magzat';
+        $storedRepeaters['dependents'][$index]['dependent_type'] = $isFetus ? 'fetus' : 'person';
+    }
+}
+
+if ($templateCode === 'combined_family_mothers_discount') {
+    foreach (($storedRepeaters['dependents'] ?? []) as $index => $row) {
+        if (!is_array($row) || ($row['dependent_type'] ?? '') !== 'person' || !empty($row['identification_method'])) {
+            continue;
+        }
+
+        $storedRepeaters['dependents'][$index]['identification_method'] = !empty($row['tax_number'])
+            ? 'tax_number'
+            : 'birth_data';
+    }
+}
+
+if ($templateCode === 'mothers_of_four_discount') {
+    $storedFields['declaration_action'] = (string) ($storedFields['declaration_action'] ?? 'claim');
+    $storedChildren = is_array($storedRepeaters['children'] ?? null) ? $storedRepeaters['children'] : [];
+
+    if (empty($storedFields['mother_discount_type']) && count($storedChildren) >= 2) {
+        $storedFields['mother_discount_type'] = count($storedChildren) >= 4
+            ? 'four_plus'
+            : (count($storedChildren) === 3 ? 'three' : 'two');
+    }
+
+    foreach ($storedChildren as $index => $row) {
+        if (!is_array($row) || !empty($row['identification_method'])) {
+            continue;
+        }
+
+        $storedRepeaters['children'][$index]['identification_method'] = !empty($row['tax_number'])
+            ? 'tax_number'
+            : 'birth_data';
+    }
+}
+
+if ($templateCode === 'combined_family_mothers_discount' && empty($storedFields['mother_discount_type'])) {
+    $legacyDependentCount = count(is_array($storedRepeaters['dependents'] ?? null) ? $storedRepeaters['dependents'] : []);
+
+    if ($legacyDependentCount >= 2) {
+        $storedFields['mother_discount_type'] = $legacyDependentCount >= 4
+            ? 'four_plus'
+            : ($legacyDependentCount === 3 ? 'three' : 'two');
+    }
+}
+
+if ($templateCode === 'first_marriage_discount' && empty($storedFields['declaration_action'])) {
+    $storedFields['declaration_action'] = 'claim';
+}
+
+if ($templateCode === 'personal_discount' && empty($storedFields['declaration_action'])) {
+    $storedFields['declaration_action'] = 'claim';
+    $storedFields['eligibility_basis'] = (string) ($storedFields['eligibility_basis'] ?? 'medical_certificate');
+}
+
+if ($templateCode === 'personal_discount'
+    && ($storedFields['eligibility_basis'] ?? '') === 'medical_certificate'
+    && empty($storedFields['condition_duration'])
+) {
+    if (!empty($storedFields['permanent_condition'])) {
+        $storedFields['condition_duration'] = 'permanent';
+    } elseif (!empty($storedFields['eligibility_end'])) {
+        $storedFields['condition_duration'] = 'until_date';
+    }
+}
+
+$data['tax_fields'] = $storedFields;
+$data['repeaters'] = $storedRepeaters;
+
 $schema = is_array($taxFormSchema ?? null) ? $taxFormSchema : [];
 $fieldData = is_array($data['tax_fields'] ?? null) ? $data['tax_fields'] : [];
 $repeaterData = is_array($data['repeaters'] ?? null) ? $data['repeaters'] : [];
@@ -37,6 +129,18 @@ $rulesForField = static function (array $field): string {
 
     if (($field['type'] ?? '') === 'date') {
         $rules[] = 'date';
+    }
+
+    if (!empty($field['not_future'])) {
+        $rules[] = 'not_future';
+    }
+
+    if (($field['type'] ?? '') === 'month') {
+        $rules[] = 'month';
+    }
+
+    if (($field['type'] ?? '') === 'number' && isset($field['min_value'])) {
+        $rules[] = 'min_value:' . (string) $field['min_value'];
     }
 
     if (($field['validation'] ?? '') === 'tax_number') {
@@ -80,19 +184,52 @@ $conditionAttributes = static function (array $field, string $conditionKey): str
     return $attributes;
 };
 
-$shellAttributes = static function (array $field) use ($conditionAttributes): string {
+$rowConditionAttributes = static function (array $field, string $conditionKey): string {
+    $condition = $field[$conditionKey] ?? null;
+
+    if (!is_array($condition)) {
+        return '';
+    }
+
+    $fieldKey = trim((string) ($condition['field'] ?? ''));
+
+    if ($fieldKey === '') {
+        return '';
+    }
+
+    $prefix = $conditionKey === 'required_when_row' ? 'required-row' : 'visible-row';
+    $attributes = ' data-' . $prefix . '-field="' . esc($fieldKey) . '"';
+
+    if (isset($condition['values']) && is_array($condition['values'])) {
+        $attributes .= ' data-' . $prefix . '-values="' . esc(implode('|', array_map('strval', $condition['values']))) . '"';
+    } else {
+        $attributes .= ' data-' . $prefix . '-value="' . esc((string) ($condition['value'] ?? '')) . '"';
+    }
+
+    return $attributes;
+};
+
+$shellAttributes = static function (array $field) use ($conditionAttributes, $rowConditionAttributes): string {
     $attributes = $conditionAttributes($field, 'visible_when');
 
     if ($attributes !== '') {
         $attributes = ' data-conditional-field' . $attributes;
     }
 
+    $rowAttributes = $rowConditionAttributes($field, 'visible_when_row');
+
+    if ($rowAttributes !== '') {
+        $attributes .= ' data-conditional-row-field' . $rowAttributes;
+    }
+
     return $attributes;
 };
 
-$inputConditionAttributes = static function (array $field) use ($conditionAttributes): string {
+$inputConditionAttributes = static function (array $field) use ($conditionAttributes, $rowConditionAttributes): string {
     return $conditionAttributes($field, 'visible_when')
-        . $conditionAttributes($field, 'required_when');
+        . $conditionAttributes($field, 'required_when')
+        . $rowConditionAttributes($field, 'visible_when_row')
+        . $rowConditionAttributes($field, 'required_when_row');
 };
 
 $sectionAttributes = static function (array $section) use ($conditionAttributes): string {
@@ -163,17 +300,21 @@ $renderField = static function (array $field, string $name, string $id, $value) 
             . esc((string) $value)
             . '</textarea>';
     } else {
-        $inputType = $type === 'date' ? 'date' : 'text';
+        $inputType = in_array($type, ['date', 'month'], true) ? $type : 'text';
         $formatAttributes = '';
 
+        if ($type === 'date' && !empty($field['not_future'])) {
+            $formatAttributes .= ' max="' . esc(date('Y-m-d')) . '"';
+        }
+
         if (($field['validation'] ?? '') === 'tax_number') {
-            $formatAttributes = ' inputmode="numeric" maxlength="10" data-format="digits" data-max-digits="10" placeholder="10 számjegy"';
+            $formatAttributes .= ' inputmode="numeric" maxlength="10" data-format="digits" data-max-digits="10" placeholder="10 számjegy"';
         } elseif (($field['validation'] ?? '') === 'company_tax_number') {
-            $formatAttributes = ' inputmode="numeric" maxlength="13" data-format="company_tax_number" data-max-digits="11" placeholder="12345676-1-42"';
+            $formatAttributes .= ' inputmode="numeric" maxlength="13" data-format="company_tax_number" data-max-digits="11" placeholder="12345676-1-42"';
         } elseif (($field['validation'] ?? '') === 'tax_number_or_fetus') {
-            $formatAttributes = ' maxlength="10" placeholder="10 számjegy vagy magzat"';
+            $formatAttributes .= ' maxlength="10" placeholder="10 számjegy vagy magzat"';
         } elseif ($type === 'number') {
-            $formatAttributes = ' inputmode="numeric" data-format="digits"';
+            $formatAttributes .= ' inputmode="numeric" data-format="digits"';
         }
 
         $html .= '<input type="' . esc($inputType) . '" id="' . esc($id) . '" name="' . esc($name) . '" value="' . esc((string) $value) . '"'
@@ -196,9 +337,10 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
     $repeaterKey = (string) ($repeater['key'] ?? 'rows');
     $rowIndex = (string) $index;
     $rowNumber = is_numeric($index) ? ((int) $index + 1) : '__ROW__';
+    $rowLabel = (string) ($repeater['row_label'] ?? 'adatlap');
     $html = '<div class="tax-repeater-row" data-repeater-row data-row-index="' . esc($rowIndex) . '">';
     $html .= '<div class="tax-repeater-row-head">';
-    $html .= '<strong><span data-row-number>' . esc((string) $rowNumber) . '</span>. sor</strong>';
+    $html .= '<strong><span data-row-number>' . esc((string) $rowNumber) . '</span>. ' . esc($rowLabel) . '</strong>';
     $html .= '<button type="button" class="btn btn-secondary btn-sm" data-remove-repeater-row>Eltávolítás</button>';
     $html .= '</div>';
     $html .= '<div class="tax-repeater-grid">';
@@ -224,7 +366,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 <div class="form-layout tax-form-layout">
     <aside class="form-context-panel">
         <div class="eyebrow"><?= esc($schema['eyebrow'] ?? 'Adóügy') ?></div>
-        <h1><?= esc($item->template_name ?? ($schema['title'] ?? 'Adóügyi nyilatkozat')) ?></h1>
+        <h1><?= esc($schema['title'] ?? ($item->template_name ?? 'Adóügyi nyilatkozat')) ?></h1>
         <p><?= esc($schema['intro'] ?? 'Az adóügyi nyilatkozat online kitöltése.') ?></p>
 
         <?php if ($person): ?>
@@ -249,12 +391,6 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                     <dt>Adóév</dt>
                     <dd><?= esc($packet->tax_year ?? ($item->template_tax_year ?? '-')) ?></dd>
                 </div>
-                <?php if (!empty($item->template_version)): ?>
-                    <div>
-                        <dt>Nyilatkozatverzió</dt>
-                        <dd><?= esc($item->template_version) ?></dd>
-                    </div>
-                <?php endif; ?>
             </dl>
         </div>
 
@@ -271,7 +407,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             <div class="section-heading">
                 <div>
                     <h2><?= esc($schema['title'] ?? 'Adóügyi nyilatkozat') ?></h2>
-                    <p class="section-note">Mentés után az adatok az összesítőben és a PDF előnézetben ellenőrizhetők, a végleges beküldésig pedig módosíthatók.</p>
+                    <p class="section-note">Mentés után az adatok az összesítőben ellenőrizhetők, a végleges beküldésig pedig módosíthatók.</p>
                 </div>
             </div>
 
@@ -292,7 +428,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                 <div class="form-progress" data-form-progress>
                     <div class="form-progress-head">
                         <span>Mezők ellenőrzése</span>
-                        <span data-progress-label>0/0 mező rendben</span>
+                        <span data-progress-label>0/0 kötelező mező kész</span>
                     </div>
                     <div class="progress-rail">
                         <span class="progress-fill" data-progress-fill></span>
@@ -341,22 +477,37 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                         : (is_array($repeaterData[$repeaterKey] ?? null) ? array_values($repeaterData[$repeaterKey]) : []);
                     $minRows = max(0, (int) ($repeater['min'] ?? 0));
                     $maxRows = max($minRows, (int) ($repeater['max'] ?? 20));
+                    $repeaterCondition = $conditionAttributes($repeater, 'visible_when');
+                    $repeaterCondition = $repeaterCondition !== '' ? ' data-conditional-repeater' . $repeaterCondition : '';
+                    $minByField = is_array($repeater['min_by_field'] ?? null)
+                        ? json_encode($repeater['min_by_field'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                        : '';
+                    $qualifiedMinByField = is_array($repeater['qualified_min_by_field'] ?? null)
+                        ? json_encode($repeater['qualified_min_by_field'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                        : '';
 
                     while (count($rows) < $minRows) {
                         $rows[] = [];
                     }
                     ?>
-                    <section class="form-section tax-repeater" data-repeater="<?= esc($repeaterKey) ?>" data-min="<?= esc((string) $minRows) ?>" data-max="<?= esc((string) $maxRows) ?>">
+                    <section class="form-section tax-repeater"
+                        data-repeater="<?= esc($repeaterKey) ?>"
+                        data-min="<?= esc((string) $minRows) ?>"
+                        data-max="<?= esc((string) $maxRows) ?>"
+                        <?= $minByField !== '' ? 'data-min-by-field="' . esc($minByField, 'attr') . '"' : '' ?>
+                        <?= $qualifiedMinByField !== '' ? 'data-qualified-min-by-field="' . esc($qualifiedMinByField, 'attr') . '"' : '' ?>
+                        <?= !empty($repeater['qualified_min_message']) ? 'data-qualified-min-message="' . esc((string) $repeater['qualified_min_message'], 'attr') . '"' : '' ?>
+                        <?= $repeaterCondition ?>>
                         <div class="tax-repeater-title-row">
                             <div class="section-copy">
-                                <h2 class="form-section-title"><?= esc($repeater['title'] ?? 'Sorok') ?></h2>
+                                <h2 class="form-section-title"><?= esc($repeater['title'] ?? 'Adatok') ?></h2>
                                 <?php if (!empty($repeater['note'])): ?>
                                     <p class="section-note"><?= esc((string) $repeater['note']) ?></p>
                                 <?php endif; ?>
                             </div>
 
                             <button type="button" class="btn btn-secondary btn-sm" data-add-repeater-row>
-                                <?= esc($repeater['add_label'] ?? 'Sor hozzáadása') ?>
+                                <?= esc($repeater['add_label'] ?? 'Új adatlap') ?>
                             </button>
                         </div>
 
@@ -411,7 +562,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 
         function updateRepeater(section) {
             var rows = rowsFor(section);
-            var min = Number(section.dataset.min || 0);
+            var min = Number(section.dataset.currentMin || section.dataset.min || 0);
             var max = Number(section.dataset.max || 20);
             var addButton = section.querySelector('[data-add-repeater-row]');
 
@@ -431,6 +582,25 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             if (addButton) {
                 addButton.disabled = rows.length >= max;
             }
+        }
+
+        function appendRepeaterRow(section) {
+            var rowsContainer = section.querySelector('[data-repeater-rows]');
+            var template = section.querySelector('template[data-repeater-template]');
+            var max = Number(section.dataset.max || 20);
+
+            if (!rowsContainer || !template || rowsFor(section).length >= max) {
+                return false;
+            }
+
+            var index = nextIndex(section);
+            var html = template.innerHTML
+                .replace(/__INDEX__/g, String(index))
+                .replace(/__ROW__/g, String(rowsFor(section).length + 1));
+
+            rowsContainer.insertAdjacentHTML('beforeend', html);
+
+            return true;
         }
 
         function refreshValidation(form) {
@@ -485,6 +655,35 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             return conditionValues(element, kind).indexOf(inputValue(inputByTaxField(form, fieldKey))) !== -1;
         }
 
+        function rowConditionValues(element, kind) {
+            var values = kind === 'required'
+                ? element.dataset.requiredRowValues
+                : element.dataset.visibleRowValues;
+            var value = kind === 'required'
+                ? element.dataset.requiredRowValue
+                : element.dataset.visibleRowValue;
+
+            return values ? String(values).split('|') : [String(value || '')];
+        }
+
+        function conditionMatchesRow(element, kind) {
+            var fieldKey = kind === 'required'
+                ? element.dataset.requiredRowField
+                : element.dataset.visibleRowField;
+
+            if (!fieldKey) {
+                return true;
+            }
+
+            var row = element.closest('[data-repeater-row]');
+
+            if (!row) {
+                return false;
+            }
+
+            return rowConditionValues(element, kind).indexOf(inputValue(inputByRowField(row, fieldKey))) !== -1;
+        }
+
         function inputByRowField(row, fieldKey) {
             var targetNameSuffix = '[' + String(fieldKey || '') + ']';
             var controls = Array.prototype.slice.call(row.querySelectorAll('input, select, textarea'));
@@ -524,6 +723,12 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             input.removeAttribute('data-validate');
         }
 
+        function escapeHtml(value) {
+            return String(value).replace(/[&<>"']/g, function (character) {
+                return {'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[character];
+            });
+        }
+
         function clearValidationState(input) {
             var shell = input.closest('.form-group') || input.closest('.checkbox-group') || input.parentNode;
             var error = shell ? shell.querySelector('.field-error') : null;
@@ -538,11 +743,21 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 
         function applyConditionalInput(form, input) {
             var shell = input.closest('[data-conditional-field]');
+            var rowShell = input.closest('[data-conditional-row-field]');
             var visible = conditionMatches(form, input, 'visible');
 
             if (shell) {
                 visible = visible && conditionMatches(form, shell, 'visible');
                 shell.hidden = !visible;
+            }
+
+            if (rowShell) {
+                visible = visible && conditionMatchesRow(rowShell, 'visible');
+                rowShell.hidden = !visible;
+            }
+
+            if (input.closest('[hidden]')) {
+                visible = false;
             }
 
             input.disabled = !visible;
@@ -558,6 +773,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             var baseRules = String(input.dataset.baseValidate || '').split('|').filter(Boolean);
             var required = input.dataset.staticRequired === '1'
                 || !!(input.dataset.requiredWhenField && conditionMatches(form, input, 'required'))
+                || !!(input.dataset.requiredRowField && conditionMatchesRow(input, 'required'))
                 || requiredByRowCondition(input);
 
             if (required && baseRules.indexOf('required') === -1) {
@@ -575,10 +791,54 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
             setInputRules(input, baseRules);
         }
 
+        function minimumForRepeater(form, section) {
+            var minimum = Number(section.dataset.min || 0);
+
+            if (!section.dataset.minByField) {
+                return minimum;
+            }
+
+            try {
+                var rule = JSON.parse(section.dataset.minByField);
+                var source = inputByTaxField(form, rule.field);
+                var value = inputValue(source);
+
+                return Math.max(minimum, Number((rule.values || {})[value] || 0));
+            } catch (error) {
+                return minimum;
+            }
+        }
+
+        function refreshConditionalRepeaters(form) {
+            Array.prototype.slice.call(form.querySelectorAll('[data-repeater]')).forEach(function (section) {
+                var visible = !section.dataset.visibleWhenField || conditionMatches(form, section, 'visible');
+                section.hidden = !visible;
+                section.dataset.currentMin = visible ? String(minimumForRepeater(form, section)) : '0';
+
+                Array.prototype.slice.call(section.querySelectorAll('input, select, textarea, button')).forEach(function (control) {
+                    if (!control.matches('[data-add-repeater-row], [data-remove-repeater-row]')) {
+                        control.disabled = !visible;
+                    }
+                });
+
+                if (visible) {
+                    while (rowsFor(section).length < Number(section.dataset.currentMin || 0)) {
+                        if (!appendRepeaterRow(section)) {
+                            break;
+                        }
+                    }
+                }
+
+                updateRepeater(section);
+            });
+        }
+
         function refreshConditionalFields(form) {
             Array.prototype.slice.call(form.querySelectorAll('[data-conditional-section]')).forEach(function (section) {
                 section.hidden = !conditionMatches(form, section, 'visible');
             });
+
+            refreshConditionalRepeaters(form);
 
             Array.prototype.slice.call(form.querySelectorAll('[data-base-validate]')).forEach(function (input) {
                 applyConditionalInput(form, input);
@@ -602,6 +862,51 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                     refreshValidation(form);
                 });
             });
+
+            form.addEventListener('submit', function (event) {
+                var errors = [];
+
+                Array.prototype.slice.call(form.querySelectorAll('[data-qualified-min-by-field]')).forEach(function (section) {
+                    if (section.hidden) {
+                        return;
+                    }
+
+                    try {
+                        var rule = JSON.parse(section.dataset.qualifiedMinByField);
+                        var sourceValue = inputValue(inputByTaxField(form, rule.field));
+                        var required = Number((rule.values || {})[sourceValue] || 0);
+                        var acceptedValues = Array.isArray(rule.accepted_values) ? rule.accepted_values.map(String) : [];
+                        var qualified = rowsFor(section).filter(function (row) {
+                            return acceptedValues.indexOf(inputValue(inputByRowField(row, rule.row_field))) !== -1;
+                        }).length;
+
+                        if (required > 0 && qualified < required) {
+                            errors.push(String(section.dataset.qualifiedMinMessage || 'Legalább %d jogosító gyermek adata szükséges.')
+                                .replace('%d', String(required)));
+                        }
+                    } catch (error) {
+                        return;
+                    }
+                });
+
+                if (errors.length === 0) {
+                    return;
+                }
+
+                event.preventDefault();
+
+                var summary = form.querySelector('.js-client-errors');
+
+                if (summary) {
+                    summary.hidden = false;
+                    summary.innerHTML = '<strong>Kérjük, javítsa az alábbiakat:</strong><ul>'
+                        + errors.map(function (error) {
+                            return '<li>' + escapeHtml(error) + '</li>';
+                        }).join('')
+                        + '</ul>';
+                    summary.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }
+            });
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -620,19 +925,9 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
 
                 if (addButton && rowsContainer && template) {
                     addButton.addEventListener('click', function () {
-                        var max = Number(section.dataset.max || 20);
-
-                        if (rowsFor(section).length >= max) {
-                            return;
-                        }
-
-                        var index = nextIndex(section);
-                        var html = template.innerHTML
-                            .replace(/__INDEX__/g, String(index))
-                            .replace(/__ROW__/g, String(rowsFor(section).length + 1));
-
-                        rowsContainer.insertAdjacentHTML('beforeend', html);
+                        appendRepeaterRow(section);
                         updateRepeater(section);
+                        refreshConditionalFields(section.closest('form'));
                         refreshValidation(section.closest('form'));
                     });
                 }
@@ -648,7 +943,7 @@ $renderRepeaterRow = static function (array $repeater, $index, array $row) use (
                 var section = button.closest('[data-repeater]');
                 var row = button.closest('[data-repeater-row]');
 
-                if (!section || !row || rowsFor(section).length <= Number(section.dataset.min || 0)) {
+                if (!section || !row || rowsFor(section).length <= Number(section.dataset.currentMin || section.dataset.min || 0)) {
                     return;
                 }
 

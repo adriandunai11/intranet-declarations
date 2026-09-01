@@ -6,7 +6,6 @@ use App\Models\BasicdataModel;
 use App\Modules\Declarations\Models\DeclarationPacketItemModel;
 use App\Modules\Declarations\Models\DeclarationPacketModel;
 use App\Modules\Declarations\Models\DeclarationSubmissionModel;
-use App\Modules\Declarations\Models\EmploymentRelationModel;
 use App\Modules\Declarations\Models\PersonModel;
 use RuntimeException;
 
@@ -16,7 +15,6 @@ class DeclarationDocumentPreviewService
     protected DeclarationPacketItemModel $itemModel;
     protected DeclarationSubmissionModel $submissionModel;
     protected PersonModel $personModel;
-    protected EmploymentRelationModel $relationModel;
     protected BasicdataModel $basicdataModel;
     protected DeclarationDocumentPlaceholderService $placeholderService;
     protected DeclarationSubmissionPdfGenerator $submissionPdfGenerator;
@@ -27,7 +25,6 @@ class DeclarationDocumentPreviewService
         $this->itemModel = new DeclarationPacketItemModel();
         $this->submissionModel = new DeclarationSubmissionModel();
         $this->personModel = new PersonModel();
-        $this->relationModel = new EmploymentRelationModel();
         $this->basicdataModel = new BasicdataModel();
         $this->placeholderService = new DeclarationDocumentPlaceholderService();
         $this->submissionPdfGenerator = new DeclarationSubmissionPdfGenerator();
@@ -52,12 +49,11 @@ class DeclarationDocumentPreviewService
 
         $templateCode = trim((string) ($item->template_code ?? ''));
         $person = $this->personModel->find((int) $packet->person_id);
-        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = !empty($packet->company_id)
             ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
             : null;
 
-        $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company);
+        $documentSummary = $this->placeholderService->documentSummary($packet, $item, $submission, $person, $company);
         $outputPath = $this->previewPath((int) $packet->id, (int) $item->id, $templateCode);
 
         $this->submissionPdfGenerator->generate($documentSummary, $outputPath);
@@ -84,7 +80,6 @@ class DeclarationDocumentPreviewService
         }
 
         $person = $this->personModel->find((int) $packet->person_id);
-        $relation = $this->relationModel->find((int) $packet->employment_relation_id);
         $company = !empty($packet->company_id)
             ? $this->basicdataModel->where('type', 'division')->where('id', (int) $packet->company_id)->first()
             : null;
@@ -95,10 +90,9 @@ class DeclarationDocumentPreviewService
             'item' => $item,
             'submission' => $submission,
             'person' => $person,
-            'relation' => $relation,
             'company' => $company,
             'templatePath' => null,
-            'documentSummary' => $this->placeholderService->documentSummary($packet, $item, $submission, $person, $relation, $company),
+            'documentSummary' => $this->placeholderService->documentSummary($packet, $item, $submission, $person, $company),
             'warning' => $warning,
         ];
     }

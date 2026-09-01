@@ -82,7 +82,7 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                 <div class="form-progress" data-form-progress>
                     <div class="form-progress-head">
                         <span>Mezők ellenőrzése</span>
-                        <span data-progress-label>0/0 mező rendben</span>
+                        <span data-progress-label>0/0 kötelező mező kész</span>
                     </div>
                     <div class="progress-rail">
                         <span class="progress-fill" data-progress-fill></span>
@@ -106,10 +106,10 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                         </div>
 
                         <div class="form-group">
-                            <label for="mother_name">Anyja neve</label>
+                            <label for="mother_name">Anyja születési neve</label>
                             <input type="text" id="mother_name" name="mother_name"
                                 value="<?= esc(old('mother_name', $data['mother_name'] ?? ($person->mother_name ?? ''))) ?>"
-                                autocomplete="off" data-validate="required|min:3" data-label="Anyja neve" required>
+                                autocomplete="off" data-validate="required|min:3" data-label="Anyja születési neve" required>
                         </div>
                     </div>
 
@@ -125,6 +125,7 @@ $validationErrors = session()->getFlashdata('validationErrors') ?? [];
                             <label for="birth_date">Születési dátum</label>
                             <input type="date" id="birth_date" name="birth_date"
                                 value="<?= esc(old('birth_date', $data['birth_date'] ?? ($person->birth_date ?? ''))) ?>"
+                                max="<?= esc(date('Y-m-d')) ?>"
                                 data-validate="required|date|not_future" data-label="Születési dátum" required>
                         </div>
                     </div>

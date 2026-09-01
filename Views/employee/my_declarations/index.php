@@ -2,13 +2,13 @@
 <?= $this->section('content') ?>
 <?php
 $person = $person ?? null;
-$relations = $relations ?? [];
+$companies = $companies ?? [];
 $templates = $templates ?? [];
 $packets = $packets ?? [];
 $defaultTaxYear = (int) ($defaultTaxYear ?? (int) date('Y'));
 $pageError = $pageError ?? null;
 $oldTemplateIds = array_map('intval', (array) old('template_ids', []));
-$oldRelationId = (string) old('relation_id', '');
+$oldCompanyId = (string) old('company_id', '');
 $oldTaxYear = old('tax_year', $defaultTaxYear);
 
 $templatesByGroup = [];
@@ -37,9 +37,9 @@ $packetStatusLabels = [
     'sent' => 'Kiküldve',
     'in_progress' => 'Kitöltés alatt',
     'submitted' => 'Ellenőrzésre vár',
-    'approved' => 'Elfogadva',
+    'approved' => 'Elfogadva, lezárásra vár',
     'closed' => 'Lezárva',
-    'completed' => 'Elfogadva',
+    'completed' => 'Elfogadva, lezárásra vár',
     'cancelled' => 'Törölve',
 ];
 
@@ -89,9 +89,9 @@ $activePackets = array_values(array_filter($packets, static function ($packet): 
                             <div class="alert alert-warning mb-0">
                                 A belépett felhasználóhoz nincs összekapcsolt nyilatkozati személy rekord.
                             </div>
-                        <?php elseif (empty($relations)): ?>
+                        <?php elseif (empty($companies)): ?>
                             <div class="alert alert-warning mb-0">
-                                Nem található nyitott jogviszony a belépett felhasználóhoz.
+                                Jelenleg nincs választható aktív cég.
                             </div>
                         <?php elseif (empty($templates)): ?>
                             <div class="alert alert-warning mb-0">
@@ -108,12 +108,11 @@ $activePackets = array_values(array_filter($packets, static function ($packet): 
                                 <?= csrf_field() ?>
 
                                 <div class="form-group">
-                                    <label for="relation_id">Jogviszony</label>
-                                    <select name="relation_id" id="relation_id" class="form-control" required>
-                                        <?php foreach ($relations as $relation): ?>
-                                            <option value="<?= (int) $relation->id ?>" <?= $oldRelationId === (string) $relation->id ? 'selected' : '' ?>>
-                                                #<?= (int) $relation->id ?> · <?= esc($relation->location ?: 'Jogviszony') ?>
-                                                <?php if (!empty($relation->start_date)): ?> · <?= esc($relation->start_date) ?><?php endif; ?>
+                                    <label for="company_id">Cég</label>
+                                    <select name="company_id" id="company_id" class="form-control" required>
+                                        <?php foreach ($companies as $company): ?>
+                                            <option value="<?= (int) $company->id ?>" <?= $oldCompanyId === (string) $company->id ? 'selected' : '' ?>>
+                                                <?= esc($company->name ?? ('#' . (int) $company->id)) ?>
                                             </option>
                                         <?php endforeach; ?>
                                     </select>
@@ -173,24 +172,34 @@ $activePackets = array_values(array_filter($packets, static function ($packet): 
                                 <th>Nyilatkozati év</th>
                                 <th>Státusz</th>
                                 <th>Létrehozva</th>
-                                <th>Beküldve / zárva</th>
+                                <th>Lezárva</th>
+                                <th>Művelet</th>
                             </tr>
                             </thead>
                             <tbody>
                             <?php if (empty($packets)): ?>
                                 <tr>
-                                    <td colspan="6" class="text-muted">Még nincs nyilatkozatcsomag.</td>
+                                    <td colspan="7" class="text-muted">Még nincs nyilatkozatcsomag.</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($packets as $packet): ?>
                                     <tr>
-                                        <td>#<?= (int) $packet->id ?></td>
+                                        <td>
+                                            <a href="<?= url('declarations/my-declarations/' . (int) $packet->id) ?>">
+                                                #<?= (int) $packet->id ?>
+                                            </a>
+                                        </td>
                                         <?php $packetFlowType = (string) ($packet->flow_type ?? ''); ?>
                                         <td><?= esc($packetFlowType !== '' ? ($packetFlowLabels[$packetFlowType] ?? $packetFlowType) : '-') ?></td>
                                         <td><?= esc($packet->tax_year ?: '-') ?></td>
                                         <td><span class="badge badge-secondary"><?= esc($packetStatusLabels[(string) ($packet->status ?? '')] ?? ($packet->status ?? '-')) ?></span></td>
                                         <td><?= esc($packet->created_at ?? '-') ?></td>
                                         <td><?= esc($packet->completed_at ?? '-') ?></td>
+                                        <td>
+                                            <a href="<?= url('declarations/my-declarations/' . (int) $packet->id) ?>" class="btn btn-sm btn-default">
+                                                Megtekintés
+                                            </a>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>

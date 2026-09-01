@@ -43,21 +43,19 @@
                     <strong>Cég</strong>
                     <p class="text-muted"><?= esc($company->name ?? ('#' . $packet->company_id)) ?></p>
 
-                    <?php if ($relation): ?>
-                        <strong>Elsődleges toborzó</strong>
-                        <p class="text-muted"><?= esc($recruiterDisplayName ?? '-') ?></p>
-                    <?php endif; ?>
+                    <strong>Elsődleges toborzó</strong>
+                    <p class="text-muted"><?= esc($recruiterDisplayName ?? '-') ?></p>
 
                     <strong>Nyilatkozati év</strong>
                     <p class="text-muted"><?= esc($packet->tax_year ?: '-') ?></p>
 
                     <?php
                     $packetFlowLabels = [
-                        'onboarding' => 'Első beléptetési csomag',
+                        'onboarding' => 'Belépés',
                         'self_service' => 'Munkavállalói önkiszolgáló',
                         'self_service_tax' => 'Munkavállalói adóügyi nyilatkozat',
                         'self_service_change' => 'Munkavállalói adatmódosítás',
-                        'admin_manual' => 'Munkaügyi kiküldés',
+                        'admin_manual' => 'Egyéb munkaügyi kiküldés',
                     ];
                     $packetFlowType = (string) ($packet->flow_type ?? '');
                     ?>
@@ -68,6 +66,9 @@
                         </p>
                     <?php endif; ?>
 
+                    <strong><?= $packetFlowType === 'onboarding' ? 'Belépés dátuma' : 'Igénylés dátuma' ?></strong>
+                    <p class="text-muted"><?= esc($packet->process_date ?: '-') ?></p>
+
                     <strong>Státusz</strong>
                     <p>
                         <?php
@@ -76,9 +77,9 @@
                             'sent' => ['Kiküldve', 'info'],
                             'in_progress' => ['Kitöltés alatt', 'warning'],
                             'submitted' => ['Ellenőrzésre vár', 'primary'],
-                            'approved' => ['Elfogadva', 'success'],
+                            'approved' => ['Elfogadva, lezárásra vár', 'warning'],
                             'closed' => ['Lezárva', 'dark'],
-                            'completed' => ['Elfogadva', 'success'],
+                            'completed' => ['Elfogadva, lezárásra vár', 'warning'],
                             'cancelled' => ['Törölve', 'danger'],
                         ];
                         [$packetStatusLabel, $packetStatusClass] = $packetStatusLabels[$packet->status] ?? [$packet->status ?: '-', 'secondary'];
@@ -86,22 +87,13 @@
                         <span class="badge badge-<?= esc($packetStatusClass) ?>"><?= esc($packetStatusLabel) ?></span>
                     </p>
 
-                    <?php if (hasPermissions('declarations_admin_override') && in_array((string) $packet->status, ['approved', 'completed'], true)): ?>
-                        <?= form_open('declarations/packets/' . $packet->id . '/close', ['class' => 'mb-3']) ?>
-                        <?= csrf_field() ?>
-                        <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('Biztosan lezárod ezt a nyilatkozatcsomagot?')">
-                            <i class="fas fa-lock pr-1"></i> Csomag lezárása
-                        </button>
-                        <?= form_close() ?>
-                    <?php endif; ?>
-
                     <strong>Létrehozva</strong>
                     <p class="text-muted"><?= esc($packet->created_at ?: '-') ?></p>
 
                     <strong>Kiküldve</strong>
                     <p class="text-muted"><?= esc($packet->sent_at ?: '-') ?></p>
 
-                    <strong>Ellenőrzés lezárva</strong>
+                    <strong>Lezárva</strong>
                     <p class="text-muted"><?= esc($packet->completed_at ?: '-') ?></p>
                 </div>
             </div>
@@ -160,6 +152,7 @@
                                 $item = $reviewItem['item'];
                                 $submission = $reviewItem['submission'];
                                 $displayRows = $reviewItem['display_rows'];
+                                $displayTables = is_array($reviewItem['display_tables'] ?? null) ? $reviewItem['display_tables'] : [];
                                 $canReview = (bool) ($reviewItem['can_review'] ?? false);
                                 $collapseId = 'packetItemCollapse' . (int) $item->id;
                                 $headingId = 'packetItemHeading' . (int) $item->id;
@@ -205,15 +198,51 @@
                                         <div class="card-body">
                                             <?php if (!$submission): ?>
                                                 <p class="text-muted mb-0">Ez a nyilatkozat még nincs beküldve.</p>
-                                            <?php elseif (empty($displayRows)): ?>
+                                            <?php elseif (empty($displayRows) && empty($displayTables)): ?>
                                                 <p class="text-muted mb-0">A beküldött adatok nem jeleníthetők meg.</p>
                                             <?php else: ?>
-                                                <dl class="row mb-0">
-                                                    <?php foreach ($displayRows as $label => $value): ?>
-                                                        <dt class="col-sm-4 col-lg-3"><?= esc($label) ?></dt>
-                                                        <dd class="col-sm-8 col-lg-9"><?= esc($value !== '' ? $value : '-') ?></dd>
+                                                <div class="border rounded bg-light p-3 mb-3">
+                                                    <strong class="d-block mb-3">Beküldött adatok</strong>
+
+                                                    <?php if (!empty($displayRows)): ?>
+                                                        <dl class="row mb-0">
+                                                            <?php foreach ($displayRows as $label => $value): ?>
+                                                                <dt class="col-sm-4 col-lg-3"><?= esc($label) ?></dt>
+                                                                <dd class="col-sm-8 col-lg-9"><?= esc($value !== '' ? $value : '-') ?></dd>
+                                                            <?php endforeach; ?>
+                                                        </dl>
+                                                    <?php endif; ?>
+
+                                                    <?php foreach ($displayTables as $table): ?>
+                                                        <?php
+                                                        $tableColumns = is_array($table['columns'] ?? null) ? $table['columns'] : [];
+                                                        $tableRows = is_array($table['rows'] ?? null) ? $table['rows'] : [];
+                                                        ?>
+                                                        <?php if (!empty($tableColumns) && !empty($tableRows)): ?>
+                                                            <div class="table-responsive mt-3">
+                                                                <strong class="d-block mb-2"><?= esc($table['title'] ?? 'Táblázat') ?></strong>
+                                                                <table class="table table-bordered table-sm bg-white mb-0">
+                                                                    <thead>
+                                                                        <tr>
+                                                                            <?php foreach ($tableColumns as $column): ?>
+                                                                                <th><?= esc($column) ?></th>
+                                                                            <?php endforeach; ?>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody>
+                                                                        <?php foreach ($tableRows as $tableRow): ?>
+                                                                            <tr>
+                                                                                <?php foreach ($tableColumns as $columnIndex => $column): ?>
+                                                                                    <td><?= esc($tableRow[$columnIndex] ?? '-') ?></td>
+                                                                                <?php endforeach; ?>
+                                                                            </tr>
+                                                                        <?php endforeach; ?>
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        <?php endif; ?>
                                                     <?php endforeach; ?>
-                                                </dl>
+                                                </div>
 
                                                 <?php
                                                 $evidenceRows = [];
@@ -235,32 +264,40 @@
                                                 ?>
 
                                                 <?php if (!empty($evidenceRows)): ?>
-                                                    <hr>
-                                                    <div class="alert alert-light border mb-0">
-                                                        <strong>Beküldési bizonyíték</strong>
-                                                        <dl class="row mb-0 mt-2">
+                                                    <details class="border rounded bg-white p-3 mb-3">
+                                                        <summary class="font-weight-bold" style="cursor: pointer;">
+                                                            <i class="fas fa-eye pr-1"></i> Beküldési bizonyíték megtekintése
+                                                        </summary>
+                                                        <dl class="row mb-0 mt-3">
                                                             <?php foreach ($evidenceRows as $label => $value): ?>
                                                                 <dt class="col-sm-4 col-lg-3"><?= esc($label) ?></dt>
                                                                 <dd class="col-sm-8 col-lg-9 text-break"><?= esc($value) ?></dd>
                                                             <?php endforeach; ?>
                                                         </dl>
-                                                    </div>
+                                                    </details>
                                                 <?php endif; ?>
 
-                                                <?php if ($submission && $item->status === 'completed' && $canReview): ?>
-                                                    <hr>
-                                                    <div class="d-flex flex-wrap">
+                                                <div class="d-flex flex-wrap align-items-center">
+                                                    <?php if ($submission && $item->status === 'completed' && $canReview): ?>
                                                         <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/accept', ['class' => 'mr-2 mb-2']) ?>
                                                         <?= csrf_field() ?>
-                                                        <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-check pr-1"></i> Elfogadás</button>
+                                                        <button type="submit" class="btn btn-success"><i class="fas fa-check pr-1"></i> Elfogadom</button>
                                                         <?= form_close() ?>
-                                                        <button type="button" class="btn btn-danger btn-sm mb-2" data-toggle="modal" data-target="#rejectItemModal<?= (int) $item->id ?>">
+                                                        <button type="button" class="btn btn-outline-danger mr-2 mb-2" data-toggle="modal" data-target="#rejectItemModal<?= (int) $item->id ?>">
                                                             <i class="fas fa-times pr-1"></i> Elutasítás
                                                         </button>
-                                                    </div>
-                                                <?php endif; ?>
 
-                                                <?php if (hasPermissions('declarations_admin_override') && $submission && in_array((string) $item->status, ['completed', 'accepted', 'rejected'], true)): ?>
+                                                    <?php endif; ?>
+
+                                                    <?php if ($submission && hasPermissions('declarations_packets_view')): ?>
+                                                        <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/generate/pdf', ['class' => 'mb-2']) ?>
+                                                        <?= csrf_field() ?>
+                                                        <button type="submit" class="btn btn-outline-secondary"><i class="fas fa-file-pdf pr-1"></i> PDF letöltése</button>
+                                                        <?= form_close() ?>
+                                                    <?php endif; ?>
+                                                </div>
+
+                                                <?php if (hasPermissions('declarations_admin_override') && !in_array((string) $packet->status, ['closed', 'cancelled'], true) && $submission && in_array((string) $item->status, ['completed', 'accepted', 'rejected'], true)): ?>
                                                     <hr>
                                                     <button type="button" class="btn btn-outline-warning btn-sm mb-2" data-toggle="modal" data-target="#reopenItemForCorrectionModal<?= (int) $item->id ?>">
                                                         <i class="fas fa-undo pr-1"></i> Újranyitás javításra
@@ -278,19 +315,6 @@
                                                     <div class="alert alert-success mt-3 mb-0">A nyilatkozat elfogadva.</div>
                                                 <?php endif; ?>
 
-                                                <?php if ($submission && hasPermissions('declarations_packets_view')): ?>
-                                                    <hr>
-                                                    <div class="d-flex flex-wrap align-items-center">
-                                                        <a href="<?= url('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/preview') ?>" class="btn btn-outline-info btn-sm mr-2 mb-2" target="_blank" rel="noopener">
-                                                            <i class="fas fa-eye pr-1"></i> PDF előnézet
-                                                        </a>
-                                                        <?= form_open('declarations/packets/' . $packet->id . '/items/' . $item->id . '/documents/generate/pdf', ['class' => 'mr-2 mb-2']) ?>
-                                                        <?= csrf_field() ?>
-                                                        <button type="submit" class="btn btn-outline-secondary btn-sm"><i class="fas fa-file-pdf pr-1"></i> PDF letöltés</button>
-                                                        <?= form_close() ?>
-                                                    </div>
-                                                    <div class="text-muted small">A PDF a beküldött online űrlapadatokból készül.</div>
-                                                <?php endif; ?>
                                             <?php endif; ?>
                                         </div>
                                     </div>
@@ -350,11 +374,11 @@
                     </div>
 
                     <p class="text-muted mb-3">
-                        A meghívó linket külön művelettel lehet létrehozni és kiküldeni.
-                        Új link generálásakor a korábbi aktív linkek érvényüket vesztik.
+                        A csomag létrehozásakor az első meghívót automatikusan kiküldjük.
+                        Új link küldésekor, illetve a csomag lezárásakor a korábbi aktív linkek érvényüket vesztik.
                     </p>
 
-                    <?php if (hasPermissions('declarations_invitations_regenerate')): ?>
+                    <?php if (hasPermissions('declarations_invitations_regenerate') && !in_array((string) $packet->status, ['closed', 'cancelled'], true)): ?>
                         <button type="button" class="btn btn-warning mb-2" data-toggle="modal" data-target="#sendNewInvitationLinkModal">
                             <i class="fas fa-paper-plane pr-1"></i>
                             <?= $latestInvitation ? 'Új meghívó link generálása és kiküldése' : 'Meghívó link generálása és kiküldése' ?>
@@ -380,11 +404,20 @@
                     </a>
                 </div>
             </div>
+
+            <?php if (hasPermissions('declarations_admin_override') && in_array((string) $packet->status, ['approved', 'completed'], true)): ?>
+                <?= form_open('declarations/packets/' . $packet->id . '/close', ['class' => 'mt-3 mb-4']) ?>
+                <?= csrf_field() ?>
+                <button type="submit" class="btn btn-success btn-lg btn-block py-3" onclick="return confirm('Biztosan lezárod ezt a nyilatkozatcsomagot? A kitöltési link ezután nem lesz használható.')">
+                    <i class="fas fa-lock pr-2"></i> Nyilatkozatcsomag lezárása
+                </button>
+                <?= form_close() ?>
+            <?php endif; ?>
         </div>
     </div>
 </section>
 
-<?php if (hasPermissions('declarations_invitations_regenerate')): ?>
+<?php if (hasPermissions('declarations_invitations_regenerate') && !in_array((string) $packet->status, ['closed', 'cancelled'], true)): ?>
     <div class="modal fade" id="sendNewInvitationLinkModal" tabindex="-1" role="dialog" aria-labelledby="sendNewInvitationLinkModalLabel" aria-hidden="true">
         <div class="modal-dialog" role="document">
             <div class="modal-content">
@@ -460,7 +493,7 @@
             </div>
         <?php endif; ?>
 
-        <?php if ($submission && hasPermissions('declarations_admin_override')): ?>
+        <?php if ($submission && hasPermissions('declarations_admin_override') && !in_array((string) $packet->status, ['closed', 'cancelled'], true)): ?>
             <div class="modal fade" id="reopenItemForCorrectionModal<?= (int) $item->id ?>" tabindex="-1" role="dialog" aria-labelledby="reopenItemForCorrectionModalLabel<?= (int) $item->id ?>" aria-hidden="true">
                 <div class="modal-dialog" role="document">
                     <div class="modal-content">

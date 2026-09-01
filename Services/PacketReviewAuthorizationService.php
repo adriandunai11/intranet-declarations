@@ -7,7 +7,7 @@ class PacketReviewAuthorizationService
     public const REVIEW_ROLE_RECRUITER = 'recruiter';
     public const REVIEW_ROLE_PAYROLL = 'payroll';
 
-    public function canReviewItem(object $packet, ?object $relation, object $item): bool
+    public function canReviewItem(object $packet, object $item): bool
     {
         if ($this->canAdminOverride()) {
             return true;
@@ -20,7 +20,7 @@ class PacketReviewAuthorizationService
         }
 
         if ($reviewRole === self::REVIEW_ROLE_RECRUITER) {
-            return $this->canReviewRecruiter($relation);
+            return $this->canReviewRecruiter($packet);
         }
 
         return false;
@@ -32,9 +32,9 @@ class PacketReviewAuthorizationService
             && hasPermissions('declarations_admin_override');
     }
 
-    public function assertCanReviewItem(object $packet, ?object $relation, object $item): void
+    public function assertCanReviewItem(object $packet, object $item): void
     {
-        if (!$this->canReviewItem($packet, $relation, $item)) {
+        if (!$this->canReviewItem($packet, $item)) {
             throw new \RuntimeException('Nincs jogosultságod ennek a nyilatkozatnak az ellenőrzéséhez.');
         }
     }
@@ -45,19 +45,19 @@ class PacketReviewAuthorizationService
             && hasPermissions('declarations_review_payroll');
     }
 
-    private function canReviewRecruiter(?object $relation): bool
+    private function canReviewRecruiter(object $packet): bool
     {
         if (!function_exists('hasPermissions') || !hasPermissions('declarations_review_recruiter')) {
             return false;
         }
 
-        if (!$relation || empty($relation->primary_recruiter_user_id)) {
+        if (empty($packet->primary_recruiter_user_id)) {
             return false;
         }
 
         $loggedUserId = function_exists('logged') ? (int) logged('id') : 0;
 
         return $loggedUserId > 0
-            && (int) $relation->primary_recruiter_user_id === $loggedUserId;
+            && (int) $packet->primary_recruiter_user_id === $loggedUserId;
     }
 }
